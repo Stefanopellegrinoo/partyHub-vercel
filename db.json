@@ -1,0 +1,155 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "name": "Usuario de Prueba",
+      "email": "test@example.com",
+      "password": "password123",
+      "role": "user"
+    },
+    {
+      "id": "2",
+      "name": "Admin",
+      "email": "admin@example.com",
+      "password": "admin123",
+      "role": "admin"
+    }
+  ],
+  "parties": [
+    {
+      "id": "1",
+      "name": "Fiesta de Verano",
+      "location": "Playa del Carmen",
+      "date": "2025-07-15T18:00:00.000Z",
+      "organizerId": "1",
+      "ticketsSold": 45,
+      "inviteCode": "SUMMER23"
+    },
+    {
+      "id": "2",
+      "name": "Noche de Electrónica",
+      "location": "Club Nocturno Central",
+      "date": "2025-07-22T22:00:00.000Z",
+      "organizerId": "2",
+      "ticketsSold": 120,
+      "inviteCode": "ELECTRO22"
+    }
+  ],
+  "partyMembers": [
+    {
+      "id": "1",
+      "partyId": "1",
+      "userId": "1",
+      "role": "organizer"
+    },
+    {
+      "id": "2",
+      "partyId": "2",
+      "userId": "1",
+      "role": "seller"
+    },
+    {
+      "id": "3",
+      "partyId": "2",
+      "userId": "2",
+      "role": "organizer"
+    }
+  ],
+  "ticketBatches": [
+    {
+      "id": "batch1",
+      "partyId": "1",
+      "name": "Early Bird",
+      "category": "general",
+      "price": 50,
+      "totalTickets": 100,
+      "availableTickets": 25,
+      "startDate": "2025-05-01T00:00:00.000Z",
+      "endDate": "2025-06-01T00:00:00.000Z",
+      "isActive": true
+    },
+    {
+      "id": "batch2",
+      "partyId": "1",
+      "name": "Regular",
+      "category": "general",
+      "price": 75,
+      "totalTickets": 200,
+      "availableTickets": 200,
+      "startDate": "2025-06-01T00:00:00.000Z",
+      "endDate": "2025-07-01T00:00:00.000Z",
+      "isActive": false
+    },
+    {
+      "id": "batch3",
+      "partyId": "1",
+      "name": "VIP",
+      "category": "vip",
+      "price": 150,
+      "totalTickets": 50,
+      "availableTickets": 50,
+      "startDate": "2025-05-01T00:00:00.000Z",
+      "endDate": "2025-07-10T00:00:00.000Z",
+      "isActive": true
+    },
+    {
+      "id": "batch4",
+      "partyId": "2",
+      "name": "Preventa",
+      "category": "general",
+      "price": 80,
+      "totalTickets": 150,
+      "availableTickets": 0,
+      "startDate": "2025-04-01T00:00:00.000Z",
+      "endDate": "2025-05-01T00:00:00.000Z",
+      "isActive": false
+    },
+    {
+      "id": "batch5",
+      "partyId": "2",
+      "name": "General",
+      "category": "general",
+      "price": 100,
+      "totalTickets": 300,
+      "availableTickets": 180,
+      "startDate": "2025-05-01T00:00:00.000Z",
+      "endDate": "2025-07-20T00:00:00.000Z",
+      "isActive": true
+    }
+  ],
+  "tickets": [
+    {
+      "id": "ticket1",
+      "batchId": "batch1",
+      "partyId": "1",
+      "sellerId": "1",
+      "price": 50,
+      "purchaseDate": "2025-05-10T14:30:00.000Z"
+    },
+    {
+      "id": "ticket2",
+      "batchId": "batch1",
+      "partyId": "1",
+      "sellerId": "1",
+      "price": 50,
+      "purchaseDate": "2025-05-11T10:15:00.000Z"
+    },
+    {
+      "id": "ticket3",
+      "batchId": "batch3",
+      "partyId": "1",
+      "sellerId": "1",
+      "price": 150,
+      "purchaseDate": "2025-05-12T16:45:00.000Z"
+    },
+    {
+      "id": "ticket4",
+      "batchId": "batch5",
+      "partyId": "2",
+      "sellerId": "1",
+      "price": 100,
+      "purchaseDate": "2025-05-15T19:20:00.000Z"
+    }
+  ],
+  "reservations": []
+}
