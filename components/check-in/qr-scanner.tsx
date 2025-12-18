@@ -28,9 +28,9 @@ interface QRScannerProps {
   partyId: string;
   onSuccess?: (ticket: Ticket) => void;
 }
-
+const codeReader = new BrowserQRCodeReader();
 export function QRScanner({ partyId, onSuccess }: QRScannerProps) {
-  const [scanning, setScanning] = useState(false);
+const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<{
     ticket?: Ticket;
     isValid: boolean;
@@ -39,15 +39,16 @@ export function QRScanner({ partyId, onSuccess }: QRScannerProps) {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  
+  // Usamos este ref para guardar el control de apagado de la cámara
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
+
   const { toast } = useToast();
 
-  const codeReader = new BrowserQRCodeReader();
-  // Clean up on unmount
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+      if (controlsRef.current) {
+        controlsRef.current.stop();
       }
     };
   }, []);
@@ -58,43 +59,43 @@ export function QRScanner({ partyId, onSuccess }: QRScannerProps) {
     setError(null);
 
     try {
-      const videoInputDevices =
-        await BrowserQRCodeReader.listVideoInputDevices();
-      const selectedDeviceId = videoInputDevices[0]?.deviceId;
-
-      if (!selectedDeviceId) {
-        throw new Error("No camera found");
-      }
+      // Pedimos específicamente la cámara trasera (environment) para que no falle en celus
+      const constraints: MediaStreamConstraints = {
+        video: { facingMode: "environment" }
+      };
 
       if (!videoRef.current) return;
 
-      const result = await codeReader.decodeFromVideoDevice(
-        selectedDeviceId,
+      // Usamos el codeReader que definimos arriba
+      const controls = await codeReader.decodeFromVideoDevice(
+        undefined, // Deja que la librería elija la mejor cámara basándose en constraints
         videoRef.current,
         (result, err) => {
           if (result) {
-            (codeReader as any).reset();
+            // No cambiamos el flujo: resetea, apaga y procesa
+            (codeReader as any).reset(); 
             stopScanning();
             handleCheckIn(result.getText());
           }
-
-          if (err) {
-            console.warn("QR read error", err);
+          if (err && !(err instanceof Error)) {
+            // ZXing tira errores constantes mientras busca el QR, es normal
           }
         }
       );
+
+      controlsRef.current = controls; // Guardamos el control para poder detenerlo
     } catch (err) {
       console.error("Error starting QR scanner", err);
       setError("No se pudo acceder a la cámara");
       setScanning(false);
     }
   };
-  const stopScanning = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
 
+  const stopScanning = () => {
+    if (controlsRef.current) {
+      controlsRef.current.stop(); // Esta es la forma correcta de apagar la cámara en esta librería
+      controlsRef.current = null;
+    }
     setScanning(false);
   };
 
