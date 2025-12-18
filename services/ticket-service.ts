@@ -41,10 +41,10 @@ export async function createTicketBatch(partyId: string, data: TicketBatchCreate
   }
 }
 
-export async function checkExistingReservation(): Promise<TicketBatch> {
+export async function checkExistingReservation(partyId: string): Promise<TicketBatch> {
   try {
 
-    const response = await api.get<TicketBatch>(`/tickets/reservations`)
+    const response = await api.get<TicketBatch>(`/tickets/${partyId}/reservations`)
     return response
   } catch (error) {
     console.error("Error creating ticket batch:", error)

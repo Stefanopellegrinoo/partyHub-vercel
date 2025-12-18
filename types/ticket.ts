@@ -1,4 +1,5 @@
 export interface TicketBatch {
+  available_stock: any
   start_time: string | number | Date
   end_time: string | number | Date
   quantity(quantity: any): unknown

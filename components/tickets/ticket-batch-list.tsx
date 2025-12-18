@@ -76,7 +76,7 @@ export function TicketBatchList({ partyId, isOrganizer }: { partyId: int, isOrga
       );
       setBatches(
         batches.map((batch) =>
-          batch.id === batchId ? { ...batch, isActive: !currentStatus } : batch
+          batch.id === batchId ? { ...batch, is_active: !currentStatus } : batch
         )
       );
       toast({
@@ -187,8 +187,8 @@ export function TicketBatchList({ partyId, isOrganizer }: { partyId: int, isOrga
                     <Ticket className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
                       {batch.capacity -
-                        batch.reserved_tickets -
-                        batch.sold_tickets}{" "}
+                        batch.reservedTickets -
+                        batch.soldTickets}{" "}
                       disponibles
                     </span>
                   </div>
@@ -197,8 +197,8 @@ export function TicketBatchList({ partyId, isOrganizer }: { partyId: int, isOrga
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">
-                    {new Date(batch.start_time).toLocaleDateString()} -{" "}
-                    {new Date(batch.end_time).toLocaleDateString()}
+                    {new Date(batch.startTime).toLocaleDateString()} -{" "}
+                    {new Date(batch.endTime).toLocaleDateString()}
                   </span>
                 </div>
               </CardContent>
@@ -212,10 +212,10 @@ export function TicketBatchList({ partyId, isOrganizer }: { partyId: int, isOrga
                     }
                     disabled={
                       isUpdating === batch.id ||
-                      batch.capacity - batch.sold_tickets == 0
+                      batch.capacity - batch.soldTickets == 0
                     }
                   >
-                    {batch.capacity - batch.sold_tickets == 0
+                    {batch.capacity - batch.soldTickets == 0
                       ? "No se puede modificar"
                       : isUpdating === batch.id
                       ? "Actualizando..."

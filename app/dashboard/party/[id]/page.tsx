@@ -35,7 +35,7 @@ export default function PartyPage({ params }: { params: { id: string } }) {
     async function checkRole() {
       try {
         const partyDetails = await checkOrganizer(id);
-       console.log("Party details:", partyDetails);
+       console.log("Party details:", partyDetails.isOrganizer);
         setIsOrganizer(partyDetails.isOrganizer);
       } catch (error) {
         console.error("Error al verificar el rol:", error);

@@ -6,6 +6,8 @@ import { io, type Socket } from "socket.io-client"
 import { useAuth } from "@/hooks/use-auth"
 import { getLocalStorage } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { baseURL } from "@/lib/axios"
+
 
 interface SocketContextType {
   socket: Socket | null
@@ -40,10 +42,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
+
       // Initialize socket connection
-      const socketInstance = io("http://localhost:4002", {
+      const socketInstance = io(baseURL, {
         // withCredentials: true,
         auth: { token },
+        transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionAttempts: maxReconnectAttempts,
         reconnectionDelay: 1000,

@@ -66,111 +66,205 @@ export function SellerPanel({ partyId }: { partyId: string }) {
   useEffect(() => {
     batchesRef.current = batches;
   }, [batches]);
-useEffect(() => {
-  let isMounted = true;
 
-  const handleSocketEvents = () => {
-    if (!socket) return;
-    socket.emit("join-party", partyId);
 
-    socket.on("ticket-reserved", ({ batchId, quantity }) => {
-      setBatches(prev =>
-        prev.map(batch =>
-          batch.id === batchId
-            ? { ...batch, reserved_tickets: batch.reserved_tickets + quantity }
-            : batch
-        )
-      );
-    });
 
-    socket.on("reservation-expired", ({ batchId, quantity }) => {
-      setBatches(prev =>
-        prev.map(batch =>
-          batch.id === batchId
-            ? { ...batch, reserved_tickets: batch.reserved_tickets - quantity }
-            : batch
-        )
-      );
-    });
 
-    socket.on("tanda-status-updated", ({ batchId, newStatus }) => {
-      setBatches(prev =>
-        prev.map(batch =>
-          batch.id === batchId
-            ? { ...batch, is_active: newStatus }
-            : batch
-        )
-      );
-    });
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  const removeSocketEvents = () => {
-    if (!socket) return;
-    socket.off("ticket-reserved");
-    socket.off("reservation-expired");
-    socket.off("ticket-sold");
-    socket.off("tanda-status-updated");
-    socket.emit("leave-party", partyId);
-  };
+    const handleSocketEvents = () => {
+      if (!socket) return;
+      socket.emit("join-party", partyId);
 
-  const loadReservation = async () => {
-    try {
-      const result = await checkExistingReservation();
-      if (!isMounted) return;
+      socket.on("ticket-reserved", ({ batchId, quantity, remainingStock }) => {
+        setBatches((prev) =>
+          prev.map((batch) =>
+            batch.id === batchId
+              ? {
+                  ...batch,
+                  // Si el backend manda el stock exacto, úsalo. Si no, réstalo localmente.
+                  available_stock:
+                    remainingStock !== undefined
+                      ? remainingStock
+                      : batch.available_stock - quantity,
+                }
+              : batch
+          )
+        );
+      });
 
-      if (!result.hasReservation) {
-        setReservation(null);
-        setIsReserving(false);
-        return;
-      }
+      socket.on("reservation-expired", ({ batchId, quantity }) => {
+        // Aquí asumimos que si expira, el stock vuelve.
+        // Si implementaste mi código de backend anterior, Redis devuelve el stock.
+        setBatches((prev) =>
+          prev.map((batch) =>
+            batch.id === batchId
+              ? { ...batch, available_stock: batch.available_stock + quantity }
+              : batch
+          )
+        );
+      });
 
-      setIsReserving(true);
+      // Cuando cancelan manualmente, también liberamos stock visualmente
+      socket.on("reservation-cancelled", ({ batchId, quantity }) => {
+        setBatches((prev) =>
+          prev.map((batch) =>
+            batch.id === batchId
+              ? { ...batch, available_stock: batch.available_stock + quantity }
+              : batch
+          )
+        );
+      });
+
+      socket.on("tanda-status-updated", ({ batchId, newStatus }) => {
+        setBatches((prev) =>
+          prev.map((batch) =>
+            batch.id === batchId ? { ...batch, is_active: newStatus } : batch
+          )
+        );
+      });
+    };
+
+    const removeSocketEvents = () => {
+      if (!socket) return;
+      socket.off("ticket-reserved");
+      socket.off("reservation-expired");
+      socket.off("ticket-sold");
+      socket.off("tanda-status-updated");
+      socket.emit("leave-party", partyId);
+    };
+
+    // const loadReservation = async () => {
+    //   try {
+    //     const result = await checkExistingReservation();
+    //     if (!isMounted) return;
+
+    //     if (!result.hasReservation) {
+    //       setReservation(null);
+    //       setIsReserving(false);
+    //       return;
+    //     }
+    //     console.log("Existing reservation:", result);
+    //     setIsReserving(true);
+    //     setReservation({
+    //       id: result.tanda_id,
+    //       expiresAt: new Date(result.expires_at).getTime(),
+    //     });
+
+    //     setSelectedBatch(result.tanda_id);
+    //     setQuantity(result.quantity);
+
+    //     const saved = sessionStorage.getItem(
+    //       `attendees:${partyId}:${result.tanda_id}`
+    //     );
+    //     if (saved) {
+    //       setAttendees(JSON.parse(saved));
+    //     }
+    //   } catch (error) {
+    //     console.error("❌ Error al recuperar reserva:", error);
+    //   }
+    // };
+
+
+
+const loadReservation = async () => {
+  try {
+    setIsLoading(true);
+    
+    // Asumimos que checkExistingReservation llama a tu endpoint GET /reservation
+    // Asegurate de pasarle el partyId si tu backend lo requiere en la URL o query param
+    const result = await checkExistingReservation(partyId );
+    
+    // Si el componente se desmontó mientras cargaba, no hacemos nada
+    if (!isMounted) return;
+
+    console.log("Estado de reserva recuperado:", result);
+
+    if (result && result.hasReservation) {
+      // 1. Restaurar el objeto de reserva (para el Timer)
       setReservation({
-        id: result.tanda_id,
+        id: String(result.tanda_id),
         expiresAt: new Date(result.expires_at).getTime(),
       });
+
+      // 2. Activar modo "Reserva" (oculta selectores, muestra confirmación)
+      setIsReserving(true);
+
+      // 3. Restaurar valores del formulario
+      const tandaIdString = String(result.tanda_id);
+      setSelectedBatch(tandaIdString); 
       setQuantity(result.quantity);
 
-      const saved = sessionStorage.getItem(
-        `attendees:${partyId}:${result.tanda_id}`
+      // 4. Intentar recuperar datos de asistentes guardados en SessionStorage
+      const savedAttendees = sessionStorage.getItem(
+        `attendees:${partyId}:${tandaIdString}`
       );
-      if (saved) {
-        setAttendees(JSON.parse(saved));
+      if (savedAttendees) {
+        setAttendees(JSON.parse(savedAttendees));
+        setShowAttendeeForm(false); // O true si quieres que se vea el form
       }
-    } catch (error) {
-      console.error("❌ Error al recuperar reserva:", error);
+
+      toast({
+        title: "Reserva recuperada",
+        description: `Tienes una reserva activa de ${result.quantity} entradas.`,
+      });
+
+    } else {
+      // Si no hay reserva, limpiamos estados "fantasma"
+      setReservation(null);
+      setIsReserving(false);
+      setQuantity(1);
     }
-  };
+  } catch (error) {
+    console.error("❌ Error al recuperar reserva:", error);
+    setReservation(null);
+    setIsReserving(false);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-  const loadBatches = async () => {
-    try {
-      const data = await getTicketBatches(partyId);
-      if (!isMounted) return;
+    const loadBatches = async () => {
+      try {
+        const data = await getTicketBatches(partyId);
+        console.log(data);
+        if (!isMounted) return;
 
-      const activeBatches = data.filter(batch => batch.is_active);
-      setBatches(data);
-      if (activeBatches.length > 0) {
-        setSelectedBatch(activeBatches[0].id);
+        const activeBatches = data.filter((batch) => batch.is_active);
+        console.log(activeBatches);
+        setBatches(data);
+        if (activeBatches.length > 0) {
+          setSelectedBatch(activeBatches[0].id);
+        }
+      } catch (error) {
+        console.error("❌ Error al cargar tandas:", error);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("❌ Error al cargar tandas:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  // 🔁 Ejecutar ambas tareas en paralelo
-  Promise.all([loadReservation(), loadBatches()])
-    .catch(err => console.error("❌ Error en carga inicial:", err));
+    Promise.all([loadBatches(), loadReservation()]).catch((err) =>
+      console.error("❌ Error en carga inicial:", err)
+    );
 
-  handleSocketEvents();
+    handleSocketEvents();
 
-  return () => {
-    isMounted = false;
-    removeSocketEvents();
-  };
-}, [partyId, socket]);
+    return () => {
+      isMounted = false;
+      removeSocketEvents();
+    };
+  }, [partyId, socket]);
 
+
+
+
+
+
+
+
+
+  
   // useEffect(() => {
   //   async function checkExistingRese() {
   //     try {
@@ -234,7 +328,7 @@ useEffect(() => {
   //         batch.id === data.batchId
   //           ? {
   //               ...batch,
-  //               reserved_tickets: batch.reserved_tickets + data.quantity,
+  //               reservedTickets: batch.reservedTickets + data.quantity,
   //             }
   //           : batch
   //       );
@@ -248,7 +342,7 @@ useEffect(() => {
   //         batch.id === data.batchId
   //           ? {
   //               ...batch,
-  //               reserved_tickets: batch.reserved_tickets - data.quantity,
+  //               reservedTickets: batch.reservedTickets - data.quantity,
   //             }
   //           : batch
   //       );
@@ -295,7 +389,6 @@ useEffect(() => {
 
     setIsReserving(true);
     try {
-      console.log("Reservando entradas...", selectedBatch);
       const result = await reserveTickets(partyId, selectedBatch, quantity);
       console.log(result);
       setReservation({
@@ -327,7 +420,7 @@ useEffect(() => {
   const handleConfirm = async () => {
     if (!reservation) return;
 
-    if(attendees.length === 0) {
+    if (attendees.length === 0) {
       toast({
         title: "Error",
         description: "No se han registrado los datos de los asistentes",
@@ -386,14 +479,20 @@ useEffect(() => {
       // Update local state
       setReservation(null);
 
+      const b = batches.map((batch) => ({
+        batch,
+      }));
+
+      console.log("Reserva cancelada:", b, selectedBatch);
       // Update the available tickets in the selected batch
       setBatches((prev) =>
         prev.map((batch) =>
           batch.id === selectedBatch
-            ? { ...batch, availableTickets: batch.availableTickets + quantity }
+            ? { ...batch, reserved_tickets: batch.reserved_tickets - quantity }
             : batch
         )
       );
+      console.log("Reserva cancelada 12:", b, selectedBatch);
 
       // Notify the user
       toast({
@@ -443,6 +542,8 @@ useEffect(() => {
       }
     } finally {
       setIsCancelling(false);
+      setIsConfirming(false);
+      setIsReserving(false);
     }
   };
 
@@ -491,17 +592,17 @@ useEffect(() => {
     );
   }
 
-const activeBatches = batches.filter((batch) => batch.is_active);
+  const activeBatches = batches.filter((batch) => batch.is_active);
 
-if (activeBatches.length === 0) {
-  return (
-    <EmptyState
-      icon={<Ticket className="h-12 w-12 text-muted-foreground" />}
-      title="No hay tandas disponibles"
-      description="No hay tandas activas con entradas disponibles para vender"
-    />
-  );
-}
+  if (activeBatches.length === 0 && !isReserving) {
+    return (
+      <EmptyState
+        icon={<Ticket className="h-12 w-12 text-muted-foreground" />}
+        title="No hay tandas disponibles"
+        description="No hay tandas activas con entradas disponibles para vender"
+      />
+    );
+  }
 
   // If showing attendee form, render only that
   if (showAttendeeForm) {
@@ -614,12 +715,25 @@ if (activeBatches.length === 0) {
                       {batches
                         .filter((batch) => batch.is_active)
                         .map((batch) => (
-                          <SelectItem key={batch.id} value={batch.id}>
-                            {batch.name} - {batch.gender} -${batch.price} (
-                            {batch.capacity -
-                              batch.reserved_tickets -
-                              batch.sold_tickets}{" "}
-                            disponibles)
+                          <SelectItem
+                            key={batch.id}
+                            value={batch.id}
+                            // Deshabilitar visualmente si es 0
+                            disabled={batch.available_stock <= 0}
+                          >
+                            {batch.name} - {batch.gender} - ${batch.price} -{" "}
+                            <span
+                              className={
+                                batch.available_stock < 5
+                                  ? "text-red-500 font-bold"
+                                  : ""
+                              }
+                            >
+                              {/* USAMOS LA PROPIEDAD DIRECTA */}
+                              {batch.available_stock > 0
+                                ? `${batch.available_stock} disponibles`
+                                : "AGOTADO"}
+                            </span>
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -631,7 +745,8 @@ if (activeBatches.length === 0) {
                     id="quantity"
                     type="number"
                     min="1"
-                    max={selectedBatchDetails?.availableTickets || 1}
+                    // El máximo es lo que diga available_stock directamente
+                    max={selectedBatchDetails?.available_stock || 1}
                     value={quantity}
                     onChange={(e) =>
                       setQuantity(Number.parseInt(e.target.value) || 1)
@@ -650,7 +765,9 @@ if (activeBatches.length === 0) {
                     <div>Cantidad:</div>
                     <div className="font-medium">{quantity}</div>
                     <div>Genero:</div>
-                    <div className="font-medium">{selectedBatchDetails.gender}</div>
+                    <div className="font-medium">
+                      {selectedBatchDetails.gender}
+                    </div>
                     <div>Total:</div>
                     <div className="font-medium text-primary">
                       ${(selectedBatchDetails.price * quantity).toFixed(2)}
@@ -665,8 +782,9 @@ if (activeBatches.length === 0) {
                   isReserving ||
                   !selectedBatch ||
                   quantity <= 0 ||
+                  // Validación mucho más limpia
                   (selectedBatchDetails &&
-                    quantity > selectedBatchDetails.availableTickets)
+                    quantity > selectedBatchDetails.available_stock)
                 }
                 className="w-full"
               >
@@ -674,13 +792,14 @@ if (activeBatches.length === 0) {
               </Button>
 
               {selectedBatchDetails &&
-                quantity > selectedBatchDetails.availableTickets && (
+              quantity > selectedBatchDetails.available_stock && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Cantidad no disponible</AlertTitle>
                     <AlertDescription>
-                      Solo hay {selectedBatchDetails.availableTickets} entradas
-                      disponibles en esta tanda.
+                      Solo hay{" "}
+                      {selectedBatchDetails.available_stock}{" "}
+                      entradas disponibles en esta tanda.
                     </AlertDescription>
                   </Alert>
                 )}

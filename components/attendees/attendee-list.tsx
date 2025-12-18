@@ -59,6 +59,7 @@ import { VirtualizedList } from "./virtualized-list";
 import { useDebounce } from "@/hooks/use-debounce";
 import { exportToCSV } from "@/lib/exportToCSV";
 interface AttendeeWithTicket extends Attendee {
+  id: string;
   tandas: any;
   ticketId: string;
   batchName: string;

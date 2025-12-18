@@ -23,7 +23,7 @@ export function PartyDetails({ id }: { id: string }) {
       try {
         const data = await getPartyDetails(id);
 
-        console.log(data);
+        console.log("async function loadParty -> data:", data);
         setParty(data);
       } catch (error) {
         if (error.response?.status === 403) {
