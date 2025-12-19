@@ -8,7 +8,7 @@ import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } f
 //   "http://localhost:3003/api"
 
 export const baseURL =
-  "https://manually-usd-things-picking.trycloudflare.com"
+  "https://party.fratellipastas.com"
 // como no tengo url propia hay que tirar por consola
 // cloudflared tunnel --url http://localhost:3000
 // cloudflared tunnel --url http://localhost:3000 --loglevel debug
