@@ -3,9 +3,18 @@ import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } f
 
 const getBaseUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  
   if (typeof window !== "undefined") {
-    // Si el usuario entra por una IP (ej 100.81...), le pegamos al puerto 3005 de esa misma IP.
-    return `http://${window.location.hostname}:3055`;
+    // Usamos el protocolo actual (https: o http:) para evitar Mixed Content
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    
+    // Si estamos en localhost, mantenemos el puerto 3055
+    if (hostname === "localhost") return "http://localhost:3055";
+    
+    // En producción, intentamos pegarle al mismo dominio pero al puerto del Gateway
+    // OJO: Esto asume que el backend está mapeado o accesible vía HTTPS
+    return `${protocol}//${hostname}:3055`;
   }
   return "http://localhost:3055";
 }
