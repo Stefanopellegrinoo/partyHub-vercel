@@ -2,21 +2,23 @@ import { refreshToken } from "@/services/auth-service";
 import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from "axios"
 
 const getBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  
-  if (typeof window !== "undefined") {
-    // Usamos el protocolo actual (https: o http:) para evitar Mixed Content
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    
-    // Si estamos en localhost, mantenemos el puerto 3055
-    if (hostname === "localhost") return "http://localhost:3055";
-    
-    // En producción, intentamos pegarle al mismo dominio pero al puerto del Gateway
-    // OJO: Esto asume que el backend está mapeado o accesible vía HTTPS
-    return `${protocol}//${hostname}:3055`;
+  // 1. Si existe la variable de entorno, es la prioridad absoluta (Producción)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
   }
-  return "http://localhost:3055";
+  
+  // 2. Fallback para desarrollo local
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "http://localhost:3055";
+    }
+  }
+
+  // 3. Si llegamos acá en Vercel sin la variable, el sistema va a fallar, 
+  // pero al menos no va a intentar pegarle a una URL inexistente.
+  console.warn("⚠️ Advertencia: NEXT_PUBLIC_API_URL no está definida. Las peticiones a la API fallarán.");
+  return "http://localhost:3055"; // Fallback por defecto
 }
 
 // Create a base URL that works in both development and production
