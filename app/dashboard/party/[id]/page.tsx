@@ -1,20 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams, useParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react";
-import { PartyDetails } from "@/components/parties/party-details";
-import { TicketBatchList } from "@/components/tickets/ticket-batch-list";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SellerPanel } from "@/components/seller/seller-panel";
-import { ReportsPanel } from "@/components/reports/reports-panel";
 import { checkOrganizer } from "@/services/party-service";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/auth-context";
-import { useParams } from "next/navigation";
-import { AttendeeList } from "@/components/attendees/attendee-list";
-import { SellerManagement } from "@/components/parties/seller-management";
 import { Button } from "@/components/ui/button";
-import { QrCode, Users, BarChart3, Ticket, UserCog } from "lucide-react";
+import { QrCode, Users, BarChart3, Ticket, UserCog, History } from "lucide-react";
 import Link from "next/link";
 import {
   LazyPartyDetails,
@@ -23,23 +16,38 @@ import {
   LazyAttendeeList,
   LazySellerManagement,
   LazyReportsPanel,
+  LazyCanceledTicketsTab,
 } from "@/components/lazy-components";
+
 export default function PartyPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const { id } = useParams();
+  
   const [isOrganizer, setIsOrganizer] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Determinar la pestaña inicial
+  const [activeTab, setActiveTab] = useState<string>("batches");
 
   useEffect(() => {
     async function checkRole() {
       try {
-        const partyDetails = await checkOrganizer(id);
-       console.log("Party details:", partyDetails.isOrganizer);
-        setIsOrganizer(partyDetails.isOrganizer);
+        const partyDetails = await checkOrganizer(id as string);
+        setIsOrganizer(!!partyDetails.isOrganizer);
+        
+        // Una vez que sabemos el rol, decidimos la tab si no hay una en la URL
+        const tabFromUrl = searchParams.get("tab");
+        if (tabFromUrl) {
+          setActiveTab(tabFromUrl);
+        } else {
+          setActiveTab(partyDetails.isOrganizer ? "batches" : "seller");
+        }
+
       } catch (error) {
         console.error("Error al verificar el rol:", error);
-        if ( error.response?.status === 403) {
+        if (error.response?.status === 403) {
           router.replace("/dashboard");
         }
       } finally {
@@ -48,7 +56,14 @@ export default function PartyPage({ params }: { params: { id: string } }) {
     }
 
     checkRole();
-  }, [id]);
+  }, [id, searchParams, router]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.replace(`/dashboard/party/${id}?${params.toString()}`, { scroll: false });
+  };
 
   if (isLoading) {
     return (
@@ -63,7 +78,7 @@ export default function PartyPage({ params }: { params: { id: string } }) {
   return (
     <div className="space-y-6">
       <Suspense fallback={<Skeleton className="h-32 w-full" />}>
-        <LazyPartyDetails id={id} />
+        <LazyPartyDetails id={id as string} />
       </Suspense>
 
       {isOrganizer && (
@@ -78,72 +93,63 @@ export default function PartyPage({ params }: { params: { id: string } }) {
       )}
 
       <Tabs
-        defaultValue={isOrganizer ? "batches" : "seller"}
+        value={activeTab}
+        onValueChange={handleTabChange}
         className="w-full"
       >
         <TabsList
-          className={`grid w-full ${
-            isOrganizer ? "grid-cols-5" : "grid-cols-2"
+          className={`grid w-full h-auto p-0 bg-transparent gap-1 ${
+            isOrganizer ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-2"
           }`}
         >
-          <TabsTrigger value="batches" className="flex items-center gap-2">
-            <Ticket className="h-4 w-4" />
-            <span className="hidden sm:inline">Tandas</span>
-            <span className="sm:hidden">Tandas</span>
-          </TabsTrigger>
-          <TabsTrigger value="seller" className="flex items-center gap-2">
-            <UserCog className="h-4 w-4" />
-            <span className="hidden sm:inline">Vender</span>
-            <span className="sm:hidden">Vender</span>
-          </TabsTrigger>
-          {isOrganizer && (
-            <>
-              <TabsTrigger
-                value="attendees"
-                className="flex items-center gap-2"
-              >
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Asistentes</span>
-                <span className="sm:hidden">Asistentes</span>
-              </TabsTrigger>
-              <TabsTrigger value="sellers" className="flex items-center gap-2">
-                <UserCog className="h-4 w-4" />
-                <span className="hidden sm:inline">Vendedores</span>
-                <span className="sm:hidden">Vendedores</span>
-              </TabsTrigger>
-              <TabsTrigger value="reports" className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Reportes</span>
-                <span className="sm:hidden">Reportes</span>
-              </TabsTrigger>
-            </>
-          )}
+          {[
+            { value: "batches", label: "TANDAS", icon: Ticket },
+            { value: "seller", label: "VENDER", icon: UserCog },
+            { value: "attendees", label: "ASISTENTES", icon: Users, orgOnly: true },
+            { value: "sellers", label: "EQUIPO", icon: UserCog, orgOnly: true },
+            { value: "reports", label: "REPORTES", icon: BarChart3, orgOnly: true },
+            { value: "canceled", label: "POOL", icon: History, orgOnly: true },
+          ].filter(tab => !tab.orgOnly || isOrganizer).map((tab) => (
+            <TabsTrigger 
+              key={tab.value}
+              value={tab.value} 
+              className="flex flex-col items-center gap-2 py-4 rounded-none border-b-2 border-white/5 data-[state=active]:border-[#7c3aed] data-[state=active]:bg-[#7c3aed]/5 data-[state=active]:text-[#7c3aed] text-zinc-600 transition-all"
+            >
+              <tab.icon className="h-4 w-4" />
+              <span className="text-[9px] font-black uppercase tracking-widest">{tab.label}</span>
+            </TabsTrigger>
+          ))}
         </TabsList>
         <TabsContent value="batches" className="mt-6">
           <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-            <LazyTicketBatchList partyId={id} isOrganizer={isOrganizer}/>
+            <LazyTicketBatchList partyId={id as string} isOrganizer={isOrganizer}/>
           </Suspense>
         </TabsContent>
         <TabsContent value="seller" className="mt-6">
           <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-            <LazySellerPanel partyId={id} />
+            <LazySellerPanel partyId={id as string} />
           </Suspense>
         </TabsContent>
         {isOrganizer && (
           <>
             <TabsContent value="attendees" className="mt-6">
               <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <LazyAttendeeList partyId={id} />
+                <LazyAttendeeList partyId={id as string} />
               </Suspense>
             </TabsContent>
             <TabsContent value="sellers" className="mt-6">
               <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <LazySellerManagement partyId={id} />
+                <LazySellerManagement partyId={id as string} />
               </Suspense>
             </TabsContent>
             <TabsContent value="reports" className="mt-6">
               <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <LazyReportsPanel partyId={id} />
+                <LazyReportsPanel partyId={id as string} />
+              </Suspense>
+            </TabsContent>
+            <TabsContent value="canceled" className="mt-6">
+              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                <LazyCanceledTicketsTab partyId={id as string} />
               </Suspense>
             </TabsContent>
           </>

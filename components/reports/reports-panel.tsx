@@ -1,20 +1,19 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getPartyReports } from "@/services/report-service"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
-import { Download, FileSpreadsheet, Printer } from "lucide-react"
-import { DataTable } from "@/components/ui/data-table"
-import type { ColumnDef } from "@tanstack/react-table"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
+import { Download, BarChart3, Users, DollarSign, Zap } from "lucide-react"
 import { exportToCSV } from "@/lib/exportToCSV"
+import { Badge } from "@/components/ui/badge"
 
 interface SalesData {
   batchName: string
   totalSales: number
   revenue: number
+  unpaidSales: number
 }
 
 interface SellerData {
@@ -24,282 +23,127 @@ interface SellerData {
 }
 
 interface ReportData {
-  totalUnpaidTickets: ReactNode
   totalRevenue: number
   totalTicketsSold: number
+  totalUnpaidTickets: number
   salesByBatch: SalesData[]
   salesBySeller: SellerData[]
 }
 
-// Agregar definiciones de columnas antes del componente ReportsPanel:
-const batchColumns: ColumnDef<any>[] = [
-  {
-    accessorKey: "batchName",
-    header: "Tanda",
-  },
-  {
-    accessorKey: "totalSales",
-    header: "Entradas Vendidas",
-    cell: ({ row }) => <div className="text-right">{row.getValue("totalSales") || 0}</div>,
-  },
-   {
-    accessorKey: "unpaidSales",
-    header: "Entradas No Pagadas",
-    cell: ({ row }) => <div className="text-right">{row.getValue("unpaidSales") || 0}</div>,
-  },
-  {
-    accessorKey: "revenue",
-    header: "Ingresos",
-    cell: ({ row }) => {
-      const revenue = row.getValue("revenue")
-      // Verificar que revenue existe y es un número
-      return <div className="text-right">${typeof revenue === "number" ? revenue.toFixed(2) : "0.00"}</div>
-    },
-  },
-]
-
-const sellerColumns: ColumnDef<any>[] = [
-  {
-    accessorKey: "sellerName",
-    header: "Vendedor",
-  },
-  {
-    accessorKey: "totalSales",
-    header: "Entradas Vendidas",
-    cell: ({ row }) => <div className="text-right">{row.getValue("totalSales") || 0}</div>,
-  },
-  {
-    accessorKey: "revenue",
-    header: "Ingresos",
-    cell: ({ row }) => {
-      const revenue = row.getValue("revenue")
-      // Verificar que revenue existe y es un número
-      return <div className="text-right">${typeof revenue === "number" ? revenue.toFixed(2) : "0.00"}</div>
-    },
-  },
-]
-
 export function ReportsPanel({ partyId }: { partyId: string }) {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [activeView, setActiveTab] = useState<"batch" | "seller">("batch")
 
   useEffect(() => {
     async function loadReports() {
       try {
         const data = await getPartyReports(partyId)
-        // Asegurarse de que todos los datos numéricos existan
-       
         if (data) {
-          // Asegurar que totalRevenue y totalTicketsSold sean números
-          data.totalRevenue = typeof data.totalRevenue === "number" ? data.totalRevenue : 0
-          data.totalTicketsSold = typeof data.totalTicketsSold === "number" ? data.totalTicketsSold : 0
-          data.totalUnpaidTickets = typeof data.totalUnpaidTickets === "number" ? data.totalUnpaidTickets : 0
-          // Asegurar que salesByBatch tenga valores numéricos
-          if (Array.isArray(data.salesByBatch)) {
-            data.salesByBatch = data.salesByBatch.map((batch) => ({
-              batchName: batch.batchName || "Sin nombre",
-              totalSales: typeof batch.totalSales === "number" ? batch.totalSales : 0,
-              revenue: typeof batch.revenue === "number" ? batch.revenue : 0,
-              unpaidSales: typeof batch.unpaidSales === "number" ? batch.unpaidSales : 0,
-            }))
-          } else {
-            data.salesByBatch = []
-          }
-
-          // Asegurar que salesBySeller tenga valores numéricos
-          if (Array.isArray(data.salesBySeller)) {
-            data.salesBySeller = data.salesBySeller.map((seller) => ({
-              sellerName: seller.sellerName || "Sin nombre",
-              totalSales: typeof seller.totalSales === "number" ? seller.totalSales : 0,
-              revenue: typeof seller.revenue === "number" ? seller.revenue : 0,
-            }))
-          } else {
-            data.salesBySeller = []
-          }
+          data.totalRevenue = Number(data.totalRevenue) || 0
+          data.totalTicketsSold = Number(data.totalTicketsSold) || 0
+          data.totalUnpaidTickets = Number(data.totalUnpaidTickets) || 0
         }
-         console.log("Datos de reportes:", data)
         setReportData(data)
-      } catch (error) {
-        console.error("Error al cargar los reportes:", error)
-        // Establecer datos por defecto en caso de error
-        setReportData({
-          totalRevenue: 0,
-          totalTicketsSold: 0,
-          totalUnpaidTickets: 0,
-          salesByBatch: [],
-          salesBySeller: [],
-        })
-      } finally {
-        setIsLoading(false)
-      }
+      } catch (e) { console.error(e); }
+      finally { setIsLoading(false); }
     }
-
-    loadReports()
+    loadReports();
   }, [partyId])
 
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#080808] border border-[#7c3aed]/30 p-4 font-mono">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{label}</p>
+          <p className="text-sm font-black text-white italic uppercase">{payload[0].name}: {payload[0].value}</p>
+          {payload[1] && <p className="text-sm font-black text-[#7c3aed] italic uppercase">{payload[1].name}: ${payload[1].value}</p>}
+        </div>
+      );
+    }
+    return null;
+  };
 
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Reportes y Administración</CardTitle>
-          <CardDescription>Cargando datos...</CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
-
-  if (!reportData) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Reportes y Administración</CardTitle>
-          <CardDescription>No hay datos disponibles</CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
+  if (isLoading) return <div className="h-96 w-full bg-white/5 animate-pulse" />;
+  if (!reportData) return <p className="text-center py-20 text-zinc-800 font-black uppercase tracking-[0.4em]">NO DATA</p>;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <CardTitle>Reportes y Administración</CardTitle>
-              <CardDescription>Analiza las ventas y gestiona las tandas</CardDescription>
-            </div>
-            {/* <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm">
-                <Printer className="h-4 w-4 mr-2" />
-                Imprimir
-              </Button>
-              <Button variant="outline" size="sm">
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Exportar
-              </Button>
-            </div> */}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Ingresos Totales</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">${reportData.totalRevenue.toFixed(2)}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Entradas Vendidas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{reportData.totalTicketsSold}</div>
-              </CardContent>
-            </Card>
-              <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Entradas No Pagadas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{reportData.totalUnpaidTickets}</div>
-              </CardContent>
-            </Card>
-          </div>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* --- BIG STATS --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-1 bg-white/5 border border-white/5 p-1">
+        <div className="bg-[#020202] p-8 space-y-4">
+          <div className="flex items-center gap-2 text-zinc-500"><DollarSign className="h-3 w-3" /><span className="text-[9px] font-black uppercase tracking-widest">Revenue</span></div>
+          <div className="text-5xl font-black italic tracking-tighter text-[#7c3aed]">${reportData.totalRevenue.toLocaleString()}</div>
+        </div>
+        <div className="bg-[#020202] p-8 space-y-4">
+          <div className="flex items-center gap-2 text-zinc-500"><Users className="h-3 w-3" /><span className="text-[9px] font-black uppercase tracking-widest">Paid Tickets</span></div>
+          <div className="text-5xl font-black italic tracking-tighter">{reportData.totalTicketsSold}</div>
+        </div>
+        <div className="bg-[#020202] p-8 space-y-4">
+          <div className="flex items-center gap-2 text-zinc-500"><Zap className="h-3 w-3" /><span className="text-[9px] font-black uppercase tracking-widest">Pending</span></div>
+          <div className="text-5xl font-black italic tracking-tighter text-red-500">{reportData.totalUnpaidTickets}</div>
+        </div>
+      </div>
 
-          <Tabs defaultValue="by-batch">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="by-batch">Por Tanda</TabsTrigger>
-              <TabsTrigger value="by-seller">Por Vendedor</TabsTrigger>
-            </TabsList>
+      {/* --- CHART SECTION --- */}
+      <div className="bg-[#080808] border border-white/5 rounded-none overflow-hidden flex flex-col">
+        <div className="p-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6">
+           <div className="space-y-1">
+             <h3 className="text-3xl font-black uppercase tracking-tighter italic">Ventas Visualizadas</h3>
+             <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-[0.3em]">Module: Real-time Analysis</p>
+           </div>
+           <div className="flex border border-white/10 p-1">
+              <Button 
+                onClick={() => setActiveTab("batch")}
+                className={`rounded-none h-10 px-6 text-[10px] font-black uppercase tracking-widest ${activeView === "batch" ? "bg-[#7c3aed] text-white" : "bg-transparent text-zinc-500 hover:text-white"}`}
+              >POR TANDA</Button>
+              <Button 
+                onClick={() => setActiveTab("seller")}
+                className={`rounded-none h-10 px-6 text-[10px] font-black uppercase tracking-widest ${activeView === "seller" ? "bg-[#7c3aed] text-white" : "bg-transparent text-zinc-500 hover:text-white"}`}
+              >POR EQUIPO</Button>
+           </div>
+        </div>
 
-            <TabsContent value="by-batch" className="space-y-4">
-              {reportData.salesByBatch && reportData.salesByBatch.length > 0 ? (
-                <>
-                  <div className="h-80 mt-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={reportData.salesByBatch} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="batchName" />
-                        <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                        <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                        <Tooltip />
-                        <Legend />
-                        <Bar yAxisId="left" dataKey="totalSales" name="Entradas Vendidas" fill="#8884d8" />
-                        <Bar yAxisId="right" dataKey="revenue" name="Ingresos ($)" fill="#82ca9d" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+        <div className="p-8">
+           <div className="h-96 w-full">
+             <ResponsiveContainer width="100%" height="100%">
+               <BarChart data={activeView === "batch" ? reportData.salesByBatch : reportData.salesBySeller}>
+                 <CartesianGrid strokeDasharray="3 3" stroke="#18181b" vertical={false} />
+                 <XAxis 
+                   dataKey={activeView === "batch" ? "batchName" : "sellerName"} 
+                   stroke="#52525b" 
+                   fontSize={10} 
+                   tickLine={false} 
+                   axisLine={false}
+                   tickFormatter={(val) => val?.toUpperCase()}
+                 />
+                 <YAxis stroke="#52525b" fontSize={10} tickLine={false} axisLine={false} />
+                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(124, 58, 237, 0.05)' }} />
+                 <Bar dataKey="totalSales" name="VENTAS" radius={[2, 2, 0, 0]}>
+                    {(activeView === "batch" ? reportData.salesByBatch : reportData.salesBySeller).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={index % 2 === 0 ? "#7c3aed" : "#6d28d9"} />
+                    ))}
+                 </Bar>
+                 <Bar dataKey="revenue" name="INGRESOS" fill="#ffffff" opacity={0.1} radius={[2, 2, 0, 0]} />
+               </BarChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
 
-                  <DataTable
-                    columns={batchColumns}
-                    data={reportData.salesByBatch}
-                    searchColumn="batchName"
-                    searchPlaceholder="Buscar tanda..."
-                  />
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => exportToCSV(reportData.salesByBatch, "ventas-por-tanda.csv")}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Exportar datos
-                  </Button>
-                </>
-              ) : (
-                <Card className="p-6 text-center">
-                  <p className="text-muted-foreground">No hay datos de ventas por tanda disponibles.</p>
-                </Card>
-              )}
-            </TabsContent>
-
-            <TabsContent value="by-seller" className="space-y-4">
-              {reportData.salesBySeller && reportData.salesBySeller.length > 0 ? (
-                <>
-                  <div className="h-80 mt-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={reportData.salesBySeller} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="sellerName" />
-                        <YAxis yAxisId="left" orientation="left" stroke="#8884d8" />
-                        <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
-                        <Tooltip />
-                        <Legend />
-                        <Bar yAxisId="left" dataKey="totalSales" name="Entradas Vendidas" fill="#8884d8" />
-                        <Bar yAxisId="right" dataKey="revenue" name="Ingresos ($)" fill="#82ca9d" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <DataTable
-                    columns={sellerColumns}
-                    data={reportData.salesBySeller}
-                    searchColumn="sellerName"
-                    searchPlaceholder="Buscar vendedor..."
-                  />
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => exportToCSV(reportData.salesBySeller, "ventas-por-vendedor.csv")}
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Exportar datos
-                  </Button>
-                </>
-              ) : (
-                <Card className="p-6 text-center">
-                  <p className="text-muted-foreground">No hay datos de ventas por vendedor disponibles.</p>
-                </Card>
-              )}
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+        <div className="p-8 bg-zinc-950 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
+           <div className="flex items-center gap-2">
+              <Zap className="h-3 w-3 text-[#7c3aed]" />
+              <span className="text-[8px] font-mono text-zinc-600 uppercase tracking-[0.4em]">Full system report ready for export</span>
+           </div>
+           <Button 
+             onClick={() => exportToCSV(activeView === "batch" ? reportData.salesByBatch : reportData.salesBySeller, "reporte.csv")}
+             variant="outline" 
+             className="border-white/10 bg-white/5 hover:bg-white/10 rounded-none h-12 px-8 font-black text-[10px] uppercase tracking-[0.2em]"
+           >
+             <Download className="h-4 w-4 mr-2" /> EXPORT CSV
+           </Button>
+        </div>
+      </div>
     </div>
   )
 }

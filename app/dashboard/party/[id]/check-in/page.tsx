@@ -9,6 +9,7 @@ import Link from "next/link"
 import { checkOrganizer } from "@/services/party-service"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LazyQRScanner } from "@/components/lazy-components"
+import { AttendeeList } from "@/components/attendees/attendee-list"
 import type { Ticket } from "@/types/ticket"
 import { useParams } from "next/navigation"
 import { useRouter } from "next/navigation"
@@ -126,17 +127,11 @@ export default function CheckInPage({ params }: { params: { id: string } }) {
           </div>
         </TabsContent>
         <TabsContent value="manual" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Búsqueda Manual</CardTitle>
-              <CardDescription>
-                Busca asistentes por nombre, email o número de documento para realizar el check-in
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-center py-8 text-muted-foreground">Funcionalidad de búsqueda manual en desarrollo</p>
-            </CardContent>
-          </Card>
+          <AttendeeList 
+            partyId={id as string} 
+            enableCheckIn={true} 
+            onCheckInSuccess={handleSuccessfulCheckin} 
+          />
         </TabsContent>
       </Tabs>
     </div>

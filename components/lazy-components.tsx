@@ -48,6 +48,14 @@ export const LazyReportsPanel = dynamic(
   },
 )
 
+export const LazyCanceledTicketsTab = dynamic(
+  () => import("@/components/parties/canceled-tickets-tab").then((mod) => ({ default: mod.CanceledTicketsTab })),
+  {
+    loading: () => <TableLoadingFallback />,
+    ssr: false,
+  },
+)
+
 export const LazyQRScanner = dynamic(
   () => import("@/components/check-in/qr-scanner").then((mod) => ({ default: mod.QRScanner })),
   {

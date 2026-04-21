@@ -35,13 +35,19 @@ export async function exportAttendeesToCSV(partyId: string, filters?: AttendeeLi
 
 export async function changePaidStatus(attendeeId: string, eventId: string): Promise<Attendee> {
   try {
-    // In development without API, use the ticket service
-
     const response = await api.put<Attendee>(`/attendees/${attendeeId}/event/${eventId}/mark-paid`)
     return response
   } catch (error) {
-    console.error("Error fetching party attendees:", error)
+    console.error("Error changing paid status:", error)
+    throw error
+  }
+}
 
+export async function deleteAttendee(attendeeId: string, eventId: string): Promise<void> {
+  try {
+    await api.delete(`/attendees/${attendeeId}/event/${eventId}`)
+  } catch (error) {
+    console.error("Error deleting attendee:", error)
     throw error
   }
 }

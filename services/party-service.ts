@@ -247,3 +247,21 @@ export async function removePartySeller(
     throw error;
   }
 }
+
+export async function getCanceledPool(partyId: string): Promise<any[]> {
+  try {
+    return await api.get<any[]>(`/tickets/parties/${partyId}/canceled-pool`);
+  } catch (error) {
+    console.error("Error fetching canceled pool:", error);
+    throw error;
+  }
+}
+
+export async function injectPooledTicket(partyId: string, ticketId: string): Promise<void> {
+  try {
+    await api.post(`/tickets/parties/${partyId}/canceled-pool/${ticketId}/inject`);
+  } catch (error) {
+    console.error("Error injecting pooled ticket:", error);
+    throw error;
+  }
+}

@@ -37,7 +37,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       // Get auth token
       const token = localStorage.getItem("authToken")
 
-      if (!token) {
+      if (!token || token === "undefined" || token === "null") {
         console.warn("No auth token available for socket connection")
         return
       }
@@ -56,7 +56,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       })
 
       // Set up event handlers
-      socketInstance.on("connection", () => {
+      socketInstance.on("connect", () => {
         console.log("Socket connected")
         setIsConnected(true)
         reconnectAttempts.current = 0
@@ -136,7 +136,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const joinRoom = useCallback(
     (room: string) => {
       if (socket && isConnected) {
-        socket.emit("join-room", room)
+        // En el backend el evento es 'join-party'
+        socket.emit("join-party", room)
       }
     },
     [socket, isConnected],
@@ -145,7 +146,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const leaveRoom = useCallback(
     (room: string) => {
       if (socket && isConnected) {
-        socket.emit("leave-room", room)
+        // En el backend el evento es 'leave-party'
+        socket.emit("leave-party", room)
       }
     },
     [socket, isConnected],

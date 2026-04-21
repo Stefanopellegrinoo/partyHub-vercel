@@ -1,42 +1,18 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DataTable } from "@/components/ui/data-table";
-import {
-  getPartyAttendees,
-  exportAttendeesToCSV,
-  changePaidStatus,
-} from "@/services/attendee-service";
-import type { Attendee } from "@/types/ticket";
+import { getPartyAttendees, deleteAttendee } from "@/services/attendee-service";
+import { checkInTicket } from "@/services/ticket-service";
+import type { Attendee, Ticket } from "@/types/ticket";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Download,
-  FileSpreadsheet,
-  Search,
-  Filter,
-  RefreshCw,
-} from "lucide-react";
+import { Download, Search, RefreshCw, UserCheck, MoreVertical, Trash2, Mail, CreditCard, Copy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { formatDate } from "@/lib/utils";
-import type { ColumnDef } from "@tanstack/react-table";
-import { EmptyState } from "@/components/ui/empty-state";
+import { useDebounce } from "@/hooks/use-debounce";
+import { exportToCSV } from "@/lib/exportToCSV";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,570 +22,246 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetFooter,
-  SheetClose,
-} from "@/components/ui/sheet";
-import { VirtualizedList } from "./virtualized-list";
-import { useDebounce } from "@/hooks/use-debounce";
-import { exportToCSV } from "@/lib/exportToCSV";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 interface AttendeeWithTicket extends Attendee {
   id: string;
-  tandas: any;
-  ticketId: string;
+  ticket_code: string;
   batchName: string;
-  purchaseDate: string;
   status: string;
+  email: string;
+  documentId: string;
+  fullName: string;
+  purchaseDate: string;
 }
 
-export function AttendeeList({ partyId }: { partyId: string }) {
+export function AttendeeList({ partyId, enableCheckIn = false, onCheckInSuccess }: { partyId: string, enableCheckIn?: boolean, onCheckInSuccess?: (t: Ticket) => void }) {
   const [attendees, setAttendees] = useState<AttendeeWithTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [batchFilter, setBatchFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [batches, setBatches] = useState<{ id: string; name: string }[]>([]);
+  const [attendeeToDelete, setAttendeeToDelete] = useState<AttendeeWithTicket | null>(null);
+  const debouncedSearch = useDebounce(searchQuery, 300);
   const { toast } = useToast();
-  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  const columns: ColumnDef<AttendeeWithTicket>[] = useMemo(
-    () => [
-      {
-        accessorKey: "fullName",
-        header: "Nombre",
-        cell: ({ row }) => (
-          <div className="font-medium">{row.getValue("fullName")}</div>
-        ),
-      },
-      {
-        accessorKey: "documentId",
-        header: "Documento",
-      },
-
-      {
-        accessorKey: "batchName",
-        header: "Tanda",
-      },
-      {
-        accessorKey: "purchaseDate",
-        header: "Fecha de compra",
-        cell: ({ row }) => formatDate(row.getValue("purchaseDate")),
-      },
-      {
-        accessorKey: "status",
-        header: "Estado",
-        cell: ({ row }) => {
-          const status = row.getValue("status") as string;
-          return (
-            <Badge
-              variant={
-                status === "pago"
-                  ? "outline"
-                  : status === "Validado"
-                  ? "success"
-                  : status === "No pago"
-                  ? "destructive"
-                  : "secondary"
-              }
-            >
-              {status === "Pago"
-                ? "Pago"
-                : status === "Validado"
-                ? "Validado"
-                : status === "No pago"
-                ? "No pago"
-                : status}
-            </Badge>
-          );
-        },
-      },
-      {
-        id: "actions",
-        cell: ({ row }) => {
-          const attendee = row.original;
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Abrir menú</span>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-4 w-4"
-                  >
-                    <circle cx="12" cy="12" r="1" />
-                    <circle cx="12" cy="5" r="1" />
-                    <circle cx="12" cy="19" r="1" />
-                  </svg>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() => {
-                    navigator.clipboard.writeText(attendee.email);
-                    toast({
-                      title: "Email copiado",
-                      description: "El email ha sido copiado al portapapeles",
-                    });
-                  }}
-                >
-                  Copiar email
-                </DropdownMenuItem>
-                {/* <DropdownMenuSeparator /> */}
-                <DropdownMenuItem
-                  onClick={() => {
-                    navigator.clipboard.writeText(attendee.documentId);
-                    toast({
-                      title: "Documento copiado",
-                      description:
-                        "El documento ha sido copiado al portapapeles",
-                    });
-                  }}
-                >
-                  Copiar documento
-                </DropdownMenuItem>
-                {attendee.status === "No pago" && (
-                  <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => {
-                    changeStatus(attendee.id, attendee.status);
-                  }}
-                  >
-                  Cambiar estado
-                </DropdownMenuItem>
-              
-                  </>
-              
-              )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        },
-      },
-    ],
-    [toast]
-  );
-
-  useEffect(() => {
-    loadAttendees();
-  }, [partyId]);
-
-  const loadAttendees = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getPartyAttendees(partyId);
-      console.log(
-        "attendee",
-       data
-      );
-      // Extract unique batches for the filter
-      // const uniqueBatches = Array.from(
-      //   new Set(data.map((ticket) => JSON.stringify({ batchName: ticket.batchName })))
-      // ).map((str) => JSON.parse(str));
-      const uniqueBatches = Array.from(
-        new Map(
-          data.map((a) => [
-            a.tanda_id,
-            { id: a.tanda_id, name: a.tanda_name },
-          ])
-        ).values()
-      );
-
-      console.log("uniqueBatches", uniqueBatches);
-
-      setBatches(uniqueBatches);
-
-      // Transform tickets with attendees into the format we need
-      const attendeesList: AttendeeWithTicket[] = data.map((ticket) => ({
-        id: ticket.id,
-        fullName: ticket.full_name,
-        documentId: ticket.document_id,
-        email: ticket.email,
-        ticketId: ticket.tanda_id,
-        batchName: ticket.tanda_name || "Desconocida",
-        purchaseDate: ticket.created_at,
-        status:
-          ticket.validated_at == null
-            ? ticket.paid
-              ? "Pago"
-              : "No pago"
-            : "Validado",
-        validated: ticket.validated_at,
+      const mapped = data.map((t: any) => ({
+        id: t.id,
+        fullName: t.full_name,
+        documentId: t.document_id,
+        email: t.email,
+        ticket_code: t.ticket_code,
+        batchName: t.tanda_name,
+        purchaseDate: t.created_at,
+        status: t.validated_at ? "Validado" : t.paid ? "Pago" : "No pago"
       }));
+      setAttendees(mapped);
+    } catch (e) { console.error(e); }
+    finally { setIsLoading(false); }
+  }, [partyId]);
 
-      console.log("attendee", attendeesList);
-      setAttendees(attendeesList);
-    } catch (error) {
-      console.error("Error al cargar los asistentes:", error);
-      toast({
-        title: "Error",
-        description:
-          "No se pudieron cargar los asistentes. Inténtalo de nuevo.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const handleExport = async () => {
-    setIsExporting(true);
+  const handleCheckIn = async (attendee: AttendeeWithTicket) => {
     try {
-      exportToCSV(attendees, "asistentes.csv");
-      toast({
-        title: "Exportación exitosa",
-        description: `La lista de asistentes ha sido exportada como asistentes.csv`,
-      });
-    } catch (error) {
-      console.error("Error al exportar los asistentes:", error);
-      toast({
-        title: "Error",
-        description:
-          "No se pudo exportar la lista de asistentes. Inténtalo de nuevo.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const changeStatus = async (attendeeId: string, status: string) => {
-    try {
-      if (status == "No pago") {
-        const res = await changePaidStatus(attendeeId, partyId);
-
-        if (!res) {
-          throw new Error("Error al actualizar el estado");
-        }
-
-        console.log("✅ Asistente actualizado:", res);
-        setAttendees((prev) =>
-          prev.map((att) =>
-            att.id === attendeeId
-              ? { ...att, status: "Pago" } // o solo paid si mail_sent no es inmediato
-              : att
-          )
-        );
-
-        toast({
-          title: "Estado actualizado",
-          description: "El asistente fue marcado como pagado y se envió el QR",
-        });
-        return res;
-      } else {
-        console.warn("❌ Solo se permite cambiar a 'paid' por ahora");
-        toast({
-          title: "Error al cambiar estado",
-          description: "Solo se permite cambiar a 'paid' por ahora",
-        });
+      const res = await checkInTicket(partyId, attendee.ticket_code);
+      if (res && res.status) {
+        toast({ title: "INGRESO EXITOSO", description: `${attendee.fullName} ha entrado.` });
+        setAttendees(prev => prev.map(a => a.id === attendee.id ? { ...a, status: "Validado" } : a));
+        if (onCheckInSuccess) onCheckInSuccess(res);
       }
-    } catch (err) {
-      console.error("❌ Error cambiando estado:", err.message);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDelete = async () => {
+    if (!attendeeToDelete) return;
+    try {
+      await deleteAttendee(attendeeToDelete.id, partyId);
+      toast({ title: "ELIMINADO", description: "El asistente fue removido del sistema." });
+      setAttendees(prev => prev.filter(a => a.id !== attendeeToDelete.id));
+      setAttendeeToDelete(null);
+    } catch (e) {
+      toast({ title: "ERROR", description: "No se pudo eliminar al asistente.", variant: "destructive" });
     }
   };
 
-  // Filter attendees based on search query and filters
-  // Filter attendees based on search query and filters
-  const filteredAttendees = useMemo(() => {
-    return attendees.filter((attendee) => {
-      // Search filter
-      const matchesSearch =
-        debouncedSearchQuery === "" ||
-        attendee.fullName
-          .toLowerCase()
-          .includes(debouncedSearchQuery.toLowerCase()) ||
-        attendee.email
-          .toLowerCase()
-          .includes(debouncedSearchQuery.toLowerCase()) ||
-        attendee.documentId
-          .toLowerCase()
-          .includes(debouncedSearchQuery.toLowerCase());
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "COPIADO", description: `${label} en el portapapeles.` });
+  };
 
-      // Batch filter
-      const matchesBatch =
-        batchFilter === "all" || attendee.ticketId == batchFilter;
-
-      // Status filter
-      const matchesStatus =
-        statusFilter === "all" || attendee.status === statusFilter;
-
-      return matchesSearch && matchesBatch && matchesStatus;
-    });
-  }, [attendees, debouncedSearchQuery, batchFilter, statusFilter]);
-  // Renderizar una tarjeta de asistente para la lista virtualizada
-  const renderAttendeeCard = useCallback(
-    (attendee: AttendeeWithTicket) => {
-      return (
-        <Card className="mb-2 hover:shadow-md transition-shadow">
-          <CardContent className="p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="font-medium">{attendee.fullName}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {attendee.email}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Doc: {attendee.documentId}
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs">{attendee.batchName}</span>
-                  <Badge
-                    variant={
-                      attendee.status === "Pago"
-                        ? "outline"
-                        : attendee.status === "Validado"
-                        ? "success"
-                        : attendee.status === "No pago"
-                        ? "destructive"
-                        : "secondary"
-                    }
-                  >
-                    {attendee.status === "Pago"
-                      ? "Pago"
-                      : attendee.status === "Validado"
-                      ? "Validado"
-                      : attendee.status === "No pago"
-                      ? "No pago"
-                      : attendee.status}
-                  </Badge>
-                </div>
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0">
-                    <span className="sr-only">Abrir menú</span>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-4 w-4"
-                    >
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="12" cy="5" r="1" />
-                      <circle cx="12" cy="19" r="1" />
-                    </svg>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      navigator.clipboard.writeText(attendee.email);
-                      toast({
-                        title: "Email copiado",
-                        description: "El email ha sido copiado al portapapeles",
-                      });
-                    }}
-                  >
-                    Copiar email
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      navigator.clipboard.writeText(attendee.documentId);
-                      toast({
-                        title: "Documento copiado",
-                        description:
-                          "El documento ha sido copiado al portapapeles",
-                      });
-                    }}
-                  >
-                    Copiar documento
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    },
-    [toast]
-  );
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Asistentes</CardTitle>
-          <CardDescription>Cargando datos de asistentes...</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  if (attendees.length === 0) {
-    return (
-      <EmptyState
-        icon={<FileSpreadsheet className="h-12 w-12 text-muted-foreground" />}
-        title="No hay asistentes registrados"
-        description="Aún no se han registrado asistentes para esta fiesta"
-        action={
-          <Button variant="outline" onClick={loadAttendees}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
-          </Button>
-        }
-      />
-    );
-  }
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.toLowerCase();
+    return attendees.filter(a => a.fullName.toLowerCase().includes(q) || a.documentId.includes(q));
+  }, [attendees, debouncedSearch]);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <CardTitle>Lista de Asistentes</CardTitle>
-          <CardDescription>
-            {filteredAttendees.length} asistentes registrados para esta fiesta
-          </CardDescription>
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
+        <div className="space-y-1">
+          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter italic">Lista de Acceso</h1>
+          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-zinc-600">
+            Identidades Registradas // {attendees.length} total
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadAttendees}
-            disabled={isLoading}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
+        <div className="flex gap-2 w-full md:w-auto">
+          <Button onClick={loadData} variant="outline" className="border-white/5 bg-white/5 rounded-none h-12 w-12 p-0">
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={isExporting}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {isExporting ? "Exportando..." : "Exportar CSV"}
+          <Button onClick={() => exportToCSV(attendees, 'asistentes.csv')} variant="outline" className="flex-1 md:flex-none border-white/5 bg-white/5 rounded-none h-12 font-black text-[10px] uppercase tracking-widest px-6">
+            <Download className="h-4 w-4 mr-2" /> EXPORTAR CSV
           </Button>
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                Filtros
-              </Button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle>Filtrar asistentes</SheetTitle>
-                <SheetDescription>
-                  Aplica filtros para encontrar asistentes específicos
-                </SheetDescription>
-              </SheetHeader>
-              <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="search">Buscar</Label>
-                  <Input
-                    id="search"
-                    placeholder="Nombre, email o documento"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+        </div>
+      </div>
+
+      <Card className="bg-[#080808] border-white/5 rounded-none overflow-hidden">
+        <CardContent className="p-0">
+          <div className="p-4 border-b border-white/5 bg-zinc-950/50">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-700" />
+              <Input 
+                placeholder="BUSCAR POR NOMBRE O DNI..." 
+                className="bg-transparent border-none focus-visible:ring-0 text-zinc-300 font-mono text-xs uppercase tracking-widest h-12 pl-12 w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* --- MOBILE VIEW --- */}
+          <div className="block sm:hidden divide-y divide-white/5">
+            {filtered.map((attendee) => (
+              <div key={attendee.id} className="p-6 space-y-4 hover:bg-white/[0.01]">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-lg font-black uppercase italic leading-none text-zinc-100">{attendee.fullName}</p>
+                    <p className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">DNI: {attendee.documentId}</p>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-zinc-700"><MoreVertical className="h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-[#080808] border-white/10 rounded-none text-zinc-300">
+                      <DropdownMenuItem onClick={() => copyToClipboard(attendee.email, "Email")}>Copiar Email</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => copyToClipboard(attendee.documentId, "Documento")}>Copiar DNI</DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-white/5" />
+                      <DropdownMenuItem onClick={() => setAttendeeToDelete(attendee)} className="text-red-500">Eliminar</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="batch">Tanda</Label>
-                  <Select value={batchFilter} onValueChange={setBatchFilter}>
-                    <SelectTrigger id="batch">
-                      <SelectValue placeholder="Selecciona una tanda" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas las tandas</SelectItem>
-                      {batches.map((batch) => (
-                        <SelectItem key={batch.id} value={batch.id}>
-                          {batch.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Estado</Label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Selecciona un estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos los estados</SelectItem>
-                      <SelectItem value="Pago">Pago</SelectItem>
-                      <SelectItem value="Validado">Validado</SelectItem>
-                      <SelectItem value="No pago">No pago</SelectItem>
-                    </SelectContent>
-                  </Select>
+                
+                <div className="flex items-center justify-between gap-4">
+                   <Badge className={
+                    attendee.status === "Validado" ? "bg-[#7c3aed] text-white" :
+                    attendee.status === "Pago" ? "bg-zinc-800 text-zinc-400" :
+                    "bg-red-950/30 text-red-500"
+                    + " rounded-none font-black text-[8px] uppercase tracking-[0.2em] px-2"}>
+                    {attendee.status}
+                  </Badge>
+                   {enableCheckIn && attendee.status === "Pago" && (
+                    <Button 
+                      onClick={() => handleCheckIn(attendee)}
+                      className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded-none h-12 w-1/2 font-black text-[10px] uppercase tracking-widest"
+                    >INGRESAR</Button>
+                   )}
                 </div>
               </div>
-              <SheetFooter>
-                <SheetClose asChild>
-                  <Button>Aplicar filtros</Button>
-                </SheetClose>
-              </SheetFooter>
-            </SheetContent>
-          </Sheet>
-          <div className="flex border rounded-md">
-            <Button
-              variant={viewMode === "table" ? "default" : "ghost"}
-              size="sm"
-              className="rounded-r-none"
-              onClick={() => setViewMode("table")}
-            >
-              Tabla
-            </Button>
-            <Button
-              variant={viewMode === "cards" ? "default" : "ghost"}
-              size="sm"
-              className="rounded-l-none"
-              onClick={() => setViewMode("cards")}
-            >
-              Tarjetas
-            </Button>
+            ))}
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-4">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre, email o documento..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-        </div>
 
-        {viewMode === "table" ? (
-          <DataTable
-            columns={columns}
-            data={filteredAttendees}
-            searchColumn="fullName"
-            searchPlaceholder="Buscar asistente..."
-          />
-        ) : (
-          <VirtualizedList
-            items={filteredAttendees}
-            height={500}
-            itemHeight={100}
-            renderItem={(attendee) => renderAttendeeCard(attendee)}
-            className="border rounded-md"
-          />
-        )}
-      </CardContent>
-    </Card>
+          {/* --- DESKTOP VIEW --- */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-white/5 bg-zinc-900/30 text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em]">
+                  <th className="px-8 py-4">Asistente</th>
+                  <th className="px-8 py-4">Documento</th>
+                  <th className="px-8 py-4">Tanda</th>
+                  <th className="px-8 py-4">Estado</th>
+                  <th className="px-8 py-4 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 font-mono">
+                {filtered.map((attendee) => (
+                  <tr key={attendee.id} className="group hover:bg-white/[0.01] transition-colors">
+                    <td className="px-8 py-6">
+                      <p className="text-sm font-black uppercase italic text-zinc-200">{attendee.fullName}</p>
+                      <p className="text-[10px] text-zinc-600">{attendee.email}</p>
+                    </td>
+                    <td className="px-8 py-6 text-xs text-zinc-500 tracking-widest">{attendee.documentId}</td>
+                    <td className="px-8 py-6 text-[10px] text-zinc-600 uppercase">{attendee.batchName}</td>
+                    <td className="px-8 py-6">
+                      <Badge className={
+                        attendee.status === "Validado" ? "bg-[#7c3aed] text-white" :
+                        attendee.status === "Pago" ? "bg-zinc-800 text-zinc-400" :
+                        "bg-red-950/30 text-red-500 border border-red-500/20"
+                        + " rounded-none font-black text-[9px] uppercase tracking-widest px-2"}>
+                        {attendee.status}
+                      </Badge>
+                    </td>
+                    <td className="px-8 py-6 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {enableCheckIn && attendee.status === "Pago" && (
+                          <Button 
+                            onClick={() => handleCheckIn(attendee)}
+                            className="bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded-none h-10 font-black text-[9px] uppercase tracking-widest px-4 shadow-[0_0_15px_rgba(124,58,237,0.2)]"
+                          >INGRESAR</Button>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-zinc-800 group-hover:text-zinc-400 transition-colors">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="bg-[#080808] border-white/10 rounded-none text-zinc-300">
+                             <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => copyToClipboard(attendee.email, "Email")}><Mail className="h-3.5 w-3.5" /> Copiar Email</DropdownMenuItem>
+                             <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => copyToClipboard(attendee.documentId, "Documento")}><Copy className="h-3.5 w-3.5" /> Copiar DNI</DropdownMenuItem>
+                             <DropdownMenuSeparator className="bg-white/5" />
+                             <DropdownMenuItem className="cursor-pointer gap-2 text-red-500 focus:text-red-500" onClick={() => setAttendeeToDelete(attendee)}><Trash2 className="h-3.5 w-3.5" /> Eliminar</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {filtered.length === 0 && (
+            <div className="py-20 text-center space-y-4 bg-zinc-950/20">
+              <Search className="h-10 w-10 text-zinc-800 mx-auto opacity-20" />
+              <p className="text-[10px] font-black text-zinc-800 uppercase tracking-[0.4em]">SIN COINCIDENCIAS</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* --- CONFIRM DELETE DIALOG --- */}
+      <AlertDialog open={!!attendeeToDelete} onOpenChange={(open) => !open && setAttendeeToDelete(null)}>
+        <AlertDialogContent className="bg-[#080808] border-white/5 rounded-none text-zinc-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter italic">¿BORRAR ASISTENTE?</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">
+              Esta acción eliminará a {attendeeToDelete?.fullName} permanentemente. El cupo será liberado en la tanda correspondiente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-zinc-900 border-none rounded-none font-bold text-[10px] uppercase tracking-widest">CANCELAR</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white rounded-none font-bold text-[10px] uppercase tracking-widest">ELIMINAR ASISTENTE</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

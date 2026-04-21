@@ -14,37 +14,48 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(date: string | Date): string {
-  if (!date) return "Fecha no disponible"
+  if (!date) return "---"
 
   try {
     const dateObj = typeof date === "string" ? new Date(date) : date
-    return new Intl.DateTimeFormat("es-MX", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(dateObj)
+    const d = dateObj.getDate().toString().padStart(2, '0');
+    const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const y = dateObj.getFullYear().toString().slice(-2);
+    return `${d}/${m}/${y}`;
   } catch (error) {
-    console.error("Error al formatear fecha:", error)
-    return "Fecha inválida"
+    return "---"
   }
 }
 
 export function formatDateTime(date: string | Date): string {
-  if (!date) return "Fecha no disponible"
+  if (!date) return "---"
 
   try {
     const dateObj = typeof date === "string" ? new Date(date) : date
-    return new Intl.DateTimeFormat("es-MX", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(dateObj)
+    const d = dateObj.getDate().toString().padStart(2, '0');
+    const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const y = dateObj.getFullYear().toString().slice(-2);
+    const hour = dateObj.getHours().toString().padStart(2, '0');
+    const min = dateObj.getMinutes().toString().padStart(2, '0');
+    return `${d}/${m}/${y} ${hour}:${min}`;
   } catch (error) {
-    console.error("Error al formatear fecha y hora:", error)
-    return "Fecha inválida"
+    return "---"
   }
+}
+
+/**
+ * Verifica si la fecha de la fiesta es estrictamente anterior a hoy.
+ * Si la fiesta es HOY (independientemente de la hora), devuelve false (no ha pasado).
+ */
+export function isPartyPast(partyDate: string | Date): boolean {
+  if (!partyDate) return false;
+  const party = new Date(partyDate);
+  party.setHours(0, 0, 0, 0);
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  return party < today;
 }
 
 export function generateRandomCode(length = 6): string {

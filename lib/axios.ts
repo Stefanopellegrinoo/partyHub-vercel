@@ -1,20 +1,17 @@
 import { refreshToken } from "@/services/auth-service";
 import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from "axios"
 
-// Create a base URL that works in both development and production
-// const baseURL =
-//   process.env.NEXT_PUBLIC_API_URL ||
-//   (typeof window !== "undefined" && window.location.origin) ||
-//   "http://localhost:3003/api"
+const getBaseUrl = () => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== "undefined") {
+    // Si el usuario entra por una IP (ej 100.81...), le pegamos al puerto 3005 de esa misma IP.
+    return `http://${window.location.hostname}:3055`;
+  }
+  return "http://localhost:3055";
+}
 
-export const baseURL =
-  "http://100.81.177.86:3000"
-// como no tengo url propia hay que tirar por consola
-// cloudflared tunnel --url http://localhost:3000
-// cloudflared tunnel --url http://localhost:3000 --loglevel debug
-// va a generar una nueva url 
-// const baseURL =
-//   "https://pichunter-cardiovascular-revelation-stupid.trycloudflare.com"
+// Create a base URL that works in both development and production
+export const baseURL = getBaseUrl();
 
 const instance = axios.create({
   baseURL,
@@ -25,8 +22,9 @@ const instance = axios.create({
 // Modificar el interceptor de solicitud para un manejo más robusto del token
 instance.interceptors.request.use((config) => {
   const token = localStorage.getItem("authToken");
-  if (token) {
-    console.log("📦 Token enviado:", token); // Verificá que esto se imprima
+  // Prevenir que mande la string "undefined" o "null" literal
+  if (token && token !== "undefined" && token !== "null") {
+    console.log("📦 Token enviado:", token.substring(0, 15) + "..."); // Solo imprimir el principio por seguridad
     config.headers.Authorization = `Bearer ${token}`;
   }
 

@@ -4,6 +4,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { AuthProvider } from "@/context/auth-context"
 import { SocketProvider } from "@/context/socket-context"
+import { NotificationProvider } from "@/context/notification-context"
 import { Toaster } from "@/components/ui/toaster"
 // import { ThemeProvider } from "@/components/theme-provider" // Removed duplicate import
 import { cn } from "@/lib/utils"
@@ -60,15 +61,19 @@ export const metadata: Metadata = {
 // En el componente RootLayout, modificar para usar Suspense
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" suppressHydrationWarning>
-      <body className={cn("min-h-screen bg-background font-sans antialiased")}>
+    <html lang="es" suppressHydrationWarning className="bg-[#020202]">
+      <body className={cn("min-h-screen bg-[#020202] font-sans antialiased text-white")}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
             <Suspense fallback={<div className="p-8">Cargando...</div>}>
             
                 <SocketProvider>
-                  {children}
-                  <Toaster />
+                  <NotificationProvider>
+                    {children}
+                    <div className="relative z-[9999]">
+                      <Toaster />
+                    </div>
+                  </NotificationProvider>
                 </SocketProvider>
            
             </Suspense>

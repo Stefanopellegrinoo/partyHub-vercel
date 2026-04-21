@@ -13,17 +13,19 @@ import type { User, UserProfileUpdate, ChangePasswordRequest } from "@/types/use
 import { useRouter, usePathname } from "next/navigation"
 import { setLocalStorage, getLocalStorage, removeLocalStorage } from "@/lib/utils"
 import { showErrorToast } from "@/lib/error-handler"
+import { setSessionCookie, removeSessionCookie } from "@/lib/cookie"
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string, remember?: boolean) => Promise<void>
-  register: (name: string, email: string, password: string) => Promise<void>
+  register: (name: string, username: string, email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   updateProfile: (data: UserProfileUpdate) => Promise<void>
   changePassword: (data: ChangePasswordRequest) => Promise<void>
   refreshUserData: () => Promise<void>
+  updateUserContext: (user: User | null) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -53,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLocalStorage("authToken", response.accessToken)
         setLocalStorage("expiresAt", response.expiresAt)
         setLocalStorage("user", response.user)
+        setSessionCookie()
 
         setUser(response.user)
         setIsAuthenticated(true)
@@ -131,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLocalStorage("authToken", response.accessToken)
       setLocalStorage("refreshToken", response.refreshToken)
       setLocalStorage("expiresAt", response.expiresAt)
+      setSessionCookie()
       
       // Only store user data if remember me is checked
       if (remember) {
@@ -147,18 +151,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = async (name: string, username: string, email: string, password: string) => {
     try {
-      const response = await registerService(name,email, password)
-      // Store auth data
-      // setLocalStorage("authToken", response.token)
-      // setLocalStorage("expiresAt", response.expiresAt)
-      // setLocalStorage("user", response.user)
-      // setLocalStorage("refreshToken", response.refreshToken)
-
-      // setUser(response.user)
-      // setIsAuthenticated(true)
-
+      const response = await registerService(name, username, email, password)
       return response
     } catch (error) {
       showErrorToast(error, "Error de registro")
@@ -178,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       removeLocalStorage("expiresAt")
       removeLocalStorage("user")
+      removeSessionCookie()
 
       setUser(null)
       setIsAuthenticated(false)
@@ -248,6 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateProfile,
         changePassword,
         refreshUserData,
+        updateUserContext: setUser,
       }}
     >
       {children}

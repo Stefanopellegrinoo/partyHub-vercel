@@ -20,7 +20,7 @@ import * as z from "zod"
 import { createTicketBatch } from "@/services/ticket-service"
 import { useToast } from "@/hooks/use-toast"
 import type { TicketBatch } from "@/types/ticket"
-import { Plus } from "lucide-react"
+import { Plus, Zap } from "lucide-react"
 
 const formSchema = z
   .object({
@@ -28,33 +28,15 @@ const formSchema = z
     category: z.string().min(1, "Selecciona una categoría"),
     quantity: z.coerce.number().int().positive("La cantidad debe ser un número positivo"),
     price: z.coerce.number().positive("El precio debe ser un número positivo"),
-    startDate: z.string().refine((val) => {
-      const date = new Date(val)
-      return !isNaN(date.getTime())
-    }, "Fecha de inicio inválida"),
-    endDate: z.string().refine((val) => {
-      const date = new Date(val)
-      return !isNaN(date.getTime())
-    }, "Fecha de fin inválida"),
+    startDate: z.string().refine((val) => !isNaN(new Date(val).getTime()), "Fecha inválida"),
+    endDate: z.string().refine((val) => !isNaN(new Date(val).getTime()), "Fecha inválida"),
   })
-  .refine(
-    (data) => {
-      const startDate = new Date(data.startDate)
-      const endDate = new Date(data.endDate)
-      return endDate > startDate
-    },
-    {
-      message: "La fecha de fin debe ser posterior a la fecha de inicio",
-      path: ["endDate"],
-    },
-  )
+  .refine((data) => new Date(data.endDate) > new Date(data.startDate), {
+    message: "La fecha de fin debe ser posterior",
+    path: ["endDate"],
+  })
 
-interface CreateTicketBatchButtonProps {
-  partyId: string
-  onBatchCreated: (batch: TicketBatch) => void
-}
-
-export function CreateTicketBatchButton({ partyId, onBatchCreated }: CreateTicketBatchButtonProps) {
+export function CreateTicketBatchButton({ partyId, onBatchCreated }: { partyId: string, onBatchCreated: (batch: TicketBatch) => void }) {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
@@ -62,12 +44,9 @@ export function CreateTicketBatchButton({ partyId, onBatchCreated }: CreateTicke
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
-      category: "",
-      quantity: 0,
-      price: 0,
+      name: "", category: "general", quantity: 0, price: 0,
       startDate: new Date().toISOString().split("T")[0],
-      endDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0], // 7 days from now
+      endDate: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
     },
     mode: "onChange",
   })
@@ -75,140 +54,84 @@ export function CreateTicketBatchButton({ partyId, onBatchCreated }: CreateTicke
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
     try {
-      console.log("Creating ticket batch with values:", values)
       const batch = await createTicketBatch(partyId, values)
-      toast({
-        title: "Tanda creada",
-        description: "La tanda de entradas ha sido creada exitosamente",
-      })
+      toast({ title: "Tanda creada", description: "Configuración exitosa." })
       onBatchCreated(batch)
       setOpen(false)
       form.reset()
     } catch (error) {
-      console.error("Error al crear la tanda:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo crear la tanda. Inténtalo de nuevo.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      toast({ title: "Error", description: "No se pudo crear.", variant: "destructive" })
+    } finally { setIsLoading(false); }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button className="h-12 bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded-none font-black uppercase tracking-widest px-8 shadow-[0_0_20px_rgba(124,58,237,0.3)] transition-all active:scale-95">
           <Plus className="h-4 w-4 mr-2" />
-          Nueva Tanda
+          NUEVA TANDA
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Crear nueva tanda de entradas</DialogTitle>
-          <DialogDescription>Define los detalles para esta tanda de entradas</DialogDescription>
-        </DialogHeader>
+      <DialogContent className="bg-[#080808] border-white/5 rounded-none p-0 overflow-hidden max-w-[500px]">
+        <div className="bg-zinc-950 p-8 border-b border-white/5 flex items-center justify-between">
+           <div className="space-y-1">
+             <DialogTitle className="text-3xl font-black uppercase tracking-tighter italic">Nueva Tanda</DialogTitle>
+             <DialogDescription className="font-mono text-[9px] uppercase tracking-[0.3em] text-zinc-600">Protocol: Stock Configuration</DialogDescription>
+           </div>
+           <Zap className="h-5 w-5 text-[#7c3aed]" />
+        </div>
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Tanda Inicial" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Categoría</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una categoría" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="general">General</SelectItem>
-                        <SelectItem value="hombre">Hombre</SelectItem>
-                        <SelectItem value="mujer">Mujer</SelectItem>
-                        <SelectItem value="mixto">Mixto</SelectItem>
-                        <SelectItem value="vip">VIP</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <form onSubmit={form.handleSubmit(onSubmit)} className="p-8 space-y-6">
+            <div className="grid grid-cols-2 gap-6">
+              <FormField control={form.control} name="name" render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Nombre</FormLabel>
+                  <FormControl><Input placeholder="GENERAL VIP" {...field} className="bg-zinc-900 border-none rounded-none h-12 font-mono uppercase text-xs tracking-widest" /></FormControl>
+                  <FormMessage className="text-[10px]" />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="category" render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Categoría</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl><SelectTrigger className="bg-zinc-900 border-none rounded-none h-12 font-mono uppercase text-[10px] tracking-widest"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent className="bg-[#080808] border-white/5 rounded-none"><SelectItem value="general">GENERAL</SelectItem><SelectItem value="vip">VIP</SelectItem><SelectItem value="mujer">MUJER</SelectItem><SelectItem value="hombre">HOMBRE</SelectItem></SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cantidad</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="1" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Precio ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="0" step="0.01" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className="grid grid-cols-2 gap-6">
+              <FormField control={form.control} name="quantity" render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Cantidad</FormLabel>
+                  <FormControl><Input type="number" {...field} className="bg-zinc-900 border-none rounded-none h-12 font-mono" /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="price" render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Precio ($)</FormLabel>
+                  <FormControl><Input type="number" step="0.01" {...field} className="bg-zinc-900 border-none rounded-none h-12 font-mono" /></FormControl>
+                </FormItem>
+              )} />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha de inicio</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha de fin</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <div className="grid grid-cols-2 gap-6">
+              <FormField control={form.control} name="startDate" render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Inicio</FormLabel>
+                  <FormControl><Input type="date" {...field} className="bg-zinc-900 border-none rounded-none h-12 font-mono text-[10px]" /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="endDate" render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Fin</FormLabel>
+                  <FormControl><Input type="date" {...field} className="bg-zinc-900 border-none rounded-none h-12 font-mono text-[10px]" /></FormControl>
+                </FormItem>
+              )} />
             </div>
-            <DialogFooter>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Creando..." : "Crear tanda"}
+            <DialogFooter className="pt-4">
+              <Button type="submit" disabled={isLoading} className="w-full h-14 bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded-none font-black uppercase tracking-widest">
+                {isLoading ? "PROCESANDO..." : "CONFIRMAR TANDA"}
               </Button>
             </DialogFooter>
           </form>

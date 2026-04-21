@@ -19,8 +19,10 @@ import {
   Scan,
   AlertTriangle,
   CheckCircle2,
+  Zap,
+  XCircle,
 } from "lucide-react";
-import { checkInTicket, verifyTicket } from "@/services/ticket-service";
+import { checkInTicket } from "@/services/ticket-service";
 import type { Ticket } from "@/types/ticket";
 import { BrowserQRCodeReader } from "@zxing/browser";
 
@@ -29,8 +31,9 @@ interface QRScannerProps {
   onSuccess?: (ticket: Ticket) => void;
 }
 const codeReader = new BrowserQRCodeReader();
+
 export function QRScanner({ partyId, onSuccess }: QRScannerProps) {
-const [scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<{
     ticket?: Ticket;
     isValid: boolean;
@@ -39,8 +42,6 @@ const [scanning, setScanning] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  
-  // Usamos este ref para guardar el control de apagado de la cámara
   const controlsRef = useRef<{ stop: () => void } | null>(null);
 
   const { toast } = useToast();
@@ -59,209 +60,63 @@ const [scanning, setScanning] = useState(false);
     setError(null);
 
     try {
-      // Pedimos específicamente la cámara trasera (environment) para que no falle en celus
-      const constraints: MediaStreamConstraints = {
-        video: { facingMode: "environment" }
-      };
-
       if (!videoRef.current) return;
 
-      // Usamos el codeReader que definimos arriba
       const controls = await codeReader.decodeFromVideoDevice(
-        undefined, // Deja que la librería elija la mejor cámara basándose en constraints
+        undefined, 
         videoRef.current,
         (result, err) => {
           if (result) {
-            // No cambiamos el flujo: resetea, apaga y procesa
-            (codeReader as any).reset(); 
             stopScanning();
             handleCheckIn(result.getText());
-          }
-          if (err && !(err instanceof Error)) {
-            // ZXing tira errores constantes mientras busca el QR, es normal
           }
         }
       );
 
-      controlsRef.current = controls; // Guardamos el control para poder detenerlo
+      controlsRef.current = controls;
     } catch (err) {
       console.error("Error starting QR scanner", err);
-      setError("No se pudo acceder a la cámara");
+      setError("No se pudo acceder a la cámara. Asegurate de dar permisos.");
       setScanning(false);
     }
   };
 
   const stopScanning = () => {
     if (controlsRef.current) {
-      controlsRef.current.stop(); // Esta es la forma correcta de apagar la cámara en esta librería
+      controlsRef.current.stop();
       controlsRef.current = null;
     }
     setScanning(false);
   };
 
-  // const processQRCode = async (ticketCode: string) => {
-  //   try {
-  //     setProcessing(true)
-
-  //     const response = await fetch("/api/attendees/validate-qr", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ ticket_code: ticketCode }),
-  //     })
-
-  //     const result = await response.json()
-
-  //     if (response.status === 200 && result.status === "valid") {
-  //       toast({
-  //         title: "Ingreso válido",
-  //         description: `${result.full_name} – ${result.tanda_name}`,
-  //       })
-
-  //       setResult({ isValid: true, ticket: result })
-  //       if (onSuccess) onSuccess(result)
-  //     } else if (result.status === "already_used") {
-  //       toast({
-  //         title: "Ticket ya usado",
-  //         description: `${result.full_name} ya ingresó.`,
-  //         variant: "destructive",
-  //       })
-  //       setResult({ isValid: false, ticket: result })
-  //     } else {
-  //       toast({
-  //         title: "Ticket inválido",
-  //         description: "El código QR no es válido.",
-  //         variant: "destructive",
-  //       })
-  //       setResult({ isValid: false })
-  //     }
-  //   } catch (err) {
-  //     console.error("Error al validar QR", err)
-  //     toast({
-  //       title: "Error",
-  //       description: "No se pudo procesar el código. Reintenta.",
-  //       variant: "destructive",
-  //     })
-  //   } finally {
-  //     setProcessing(false)
-  //   }
-  // }
   const handleCheckIn = async (ticketCode: string) => {
-  try {
-    setProcessing(true)
+    try {
+      setProcessing(true);
+      const data = await checkInTicket(partyId, ticketCode);
 
-   const data = await checkInTicket(partyId, ticketCode);
+      if (!data) {
+        setResult({ isValid: false });
+        return;
+      }
 
-    // const data = await res.json()
-    console.log("Check-in data:", data)
-    if(!data) {
+      if (data.status) {
+        setResult({ isValid: true, ticket: data });
+        if (onSuccess) onSuccess(data);
+      } else {
+        setResult({
+          isValid: false,
+          ticket: data,
+          message: "ESTE TICKET YA FUE USADO",
+        });
+      }
 
-      toast({
-        title: "Ticket inválido",
-        description: "El código QR no pertenece a un ticket válido.",
-        variant: "destructive",
-      })
-
-      setResult({ isValid: false })
-      return
+    } catch (err) {
+      console.error("Error checking in ticket:", err);
+      setError("Error interno del servidor");
+    } finally {
+      setProcessing(false);
     }
-
-    if (data.status) {
-      toast({
-        title: "Check-in exitoso",
-        description: `${data.full_name || "Asistente"} ha ingresado correctamente.`,
-      })
-
-      setResult({ isValid: true, ticket: data })
-      if (onSuccess) onSuccess(data)
-    } else {
-      toast({
-        title: "Ticket ya usado",
-        description: `${data.full_name || "Este ticket"} ya fue ingresado.`,
-        variant: "destructive",
-      })
-
-      setResult({
-        isValid: false,
-        ticket: data,
-        message: "Ticket ya fue escaneado previamente.",
-      })
-    }
-
-  } catch (err) {
-    console.error("Error checking in ticket:", err)
-    toast({
-      title: "Error",
-      description: "No se pudo procesar el QR.",
-      variant: "destructive",
-    })
-  } finally {
-    setProcessing(false)
-  }
-}
-
-
-  // const handleCheckIn = async (ticketCode: string) => {
-  //   try {
-  //     setProcessing(true);
-
-  //     // Check in the ticket
-  //     const response = await checkInTicket(partyId, ticketCode);
-
-  //     if (response.status === 200 && result.status === "valid") {
- 
-  //     toast({
-  //       title: "Check-in exitoso",
-  //       description: `${
-  //         response.attendee?.fullName ||
-  //         response.customerName ||
-  //         "Asistente"
-  //       } ha ingresado correctamente.`,
-  //       variant: "success",
-  //     });
-
-
-  //       setResult({ isValid: true, ticket: result });
-  //     } else if (response.status === "already_used") {
-
-  //     setResult({
-  //       ...result,
-  //       ticket: response,
-  //       isValid: false,
-  //       message: "Ticket has already been used",
-  //     });
-
-  //       setResult({ isValid: false, ticket: result });
-  //     } else {
-  //       toast({
-  //         title: "Ticket inválido",
-  //         description: "El código QR no es válido.",
-  //         variant: "destructive",
-  //       });
-  //       setResult({ isValid: false });
-  //     }
-
-  //     // Update the result with the checked-in ticket
-  //     setResult({
-  //       ...result,
-  //       ticket: response,
-  //       isValid: false,
-  //       message: "Ticket has already been used",
-  //     });
-
-  //     if (onSuccess) {
-  //       onSuccess(response);
-  //     }
-  //   } catch (err) {
-  //     console.error("Error checking in ticket:", err);
-  //     toast({
-  //       title: "Error",
-  //       description: "No se pudo realizar el check-in. Inténtalo de nuevo.",
-  //       variant: "destructive",
-  //     });
-  //   } finally {
-  //     setProcessing(false);
-  //   }
-  // };
+  };
 
   const renderResult = () => {
     if (!result) return null;
@@ -270,127 +125,141 @@ const [scanning, setScanning] = useState(false);
 
     if (!result.isValid) {
       return (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Boleto no válido</AlertTitle>
-          <AlertDescription>
-            {result.message || "Este boleto no es válido para el evento."}
-            {ticket && (
-              <div className="mt-2">
-                <p>
-                  <strong>Documento:</strong> {ticket.document_id}
-                </p>
-                <p>
-                  <strong>Asistente:</strong>{" "}
-                  {ticket.full_name ||
-                    ticket.customerName ||
-                    "Desconocido"}
-                </p>
-                <p>
-                  <strong>Estado:</strong> {ticket.status ? "Valido" : "No valido"}
-                </p>
-              </div>
-            )}
-          </AlertDescription>
-        </Alert>
+        <div className="flex flex-col items-center justify-center p-8 space-y-6 text-center animate-in fade-in zoom-in duration-300">
+          <div className="w-24 h-24 bg-red-600 flex items-center justify-center rounded-none rotate-3 shadow-[0_0_40px_rgba(220,38,38,0.5)]">
+            <XCircle className="w-16 h-16 text-white" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-4xl font-black uppercase tracking-tighter italic text-red-500">ACCESO DENEGADO</h2>
+            <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.2em]">{result.message || "TICKET INVÁLIDO"}</p>
+          </div>
+          {ticket && (
+            <div className="p-4 bg-white/5 border border-white/10 w-full font-mono text-left space-y-1">
+               <p className="text-[10px] text-zinc-500 uppercase">ASISTENTE</p>
+               <p className="text-sm font-bold uppercase">{ticket.full_name || "DESCONOCIDO"}</p>
+            </div>
+          )}
+          <Button variant="outline" className="w-full h-14 border-white/10 hover:bg-white/5 rounded-none font-black uppercase tracking-widest" onClick={() => setResult(null)}>
+            INTENTAR OTRO
+          </Button>
+        </div>
       );
     }
 
     if (ticket) {
       return (
-        <Alert variant="success">
-          <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Boleto válido</AlertTitle>
-          <AlertDescription>
-            <div className="mt-2">
-              <p>
-                <strong>Documento:</strong> {ticket.document_id}
-              </p>
-              <p>
-                <strong>Asistente:</strong> {ticket.full_name || ticket.customerName || "Desconocido"}
-              </p>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )
+        <div className="flex flex-col items-center justify-center p-8 space-y-6 text-center animate-in fade-in zoom-in duration-300">
+          <div className="w-24 h-24 bg-[#7c3aed] flex items-center justify-center rounded-none -rotate-3 shadow-[0_0_40px_rgba(124,58,237,0.5)]">
+            <CheckCircle2 className="w-16 h-16 text-black" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-4xl font-black uppercase tracking-tighter italic text-[#7c3aed]">¡VÁLIDO!</h2>
+            <p className="text-zinc-500 font-mono text-[10px] uppercase tracking-[0.2em]">CHECK-IN REGISTRADO</p>
+          </div>
+          <div className="p-6 bg-white/5 border border-white/10 w-full font-mono text-left space-y-3">
+             <div>
+               <p className="text-[9px] text-zinc-600 uppercase">ASISTENTE</p>
+               <p className="text-lg font-black uppercase italic leading-none">{ticket.full_name}</p>
+             </div>
+             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                <div>
+                  <p className="text-[9px] text-zinc-600 uppercase">DOC</p>
+                  <p className="text-xs font-bold tracking-widest">{ticket.document_id}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-zinc-600 uppercase">TANDA</p>
+                  <p className="text-xs font-bold tracking-widest">{ticket.tanda_name}</p>
+                </div>
+             </div>
+          </div>
+          <Button className="w-full h-20 bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded-none font-black uppercase tracking-widest text-xl shadow-[0_0_20px_rgba(124,58,237,0.3)]" onClick={() => setResult(null)}>
+            SIGUIENTE SCAN
+          </Button>
+        </div>
+      );
     }
 
     return null;
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Scan className="h-5 w-5" />
-          Escanear Código QR
-        </CardTitle>
-        <CardDescription>
-          Escanea el código QR del boleto para verificar y realizar el check-in.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col items-center">
+    <div className="w-full max-w-lg mx-auto bg-[#080808] border border-white/5 relative">
+      <div className="absolute top-0 left-0 w-full h-1 bg-[#7c3aed]" />
+      
+      <div className="p-6 border-b border-white/5 flex items-center justify-between">
+        <div className="space-y-1">
+          <h2 className="text-xl font-black uppercase tracking-tighter italic">Scanner v2</h2>
+          <p className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Protocol: Direct Validation</p>
+        </div>
+        <Zap className="w-5 h-5 text-[#7c3aed] fill-[#7c3aed] animate-pulse" />
+      </div>
+
+      <div className="p-6">
         {scanning ? (
-          <div className="relative w-full aspect-square bg-black rounded-md overflow-hidden">
-            <video
-              ref={videoRef}
-              className="absolute inset-0 w-full h-full object-cover"
-              playsInline
-              muted
-            />
-            <div className="absolute inset-0 border-2 border-white/50 rounded-md" />
+          <div className="relative w-full aspect-video bg-black overflow-hidden border border-white/5">
+            <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover grayscale opacity-60" playsInline muted />
+            <div className="absolute inset-0 border-[20px] border-black/80" />
+            
+            {/* Scan Line Animation */}
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-48 h-48 border-2 border-green-500 rounded-md animate-pulse" />
+               <div className="w-[80%] h-[1px] bg-[#7c3aed] shadow-[0_0_15px_#7c3aed] animate-scan-line" />
+            </div>
+            
+            <div className="absolute top-4 left-4 font-mono text-[9px] text-[#7c3aed] uppercase tracking-widest animate-pulse">
+              [ LIVE CAMERA FEED ]
             </div>
           </div>
         ) : (
-          <div className="w-full aspect-square bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center">
+          <div className="min-h-[300px] flex items-center justify-center bg-zinc-950/50 border border-white/5 border-dashed">
             {result ? (
-              renderResult()
+              <div className="w-full">{renderResult()}</div>
             ) : error ? (
-              <Alert variant="destructive" className="m-4">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <div className="p-8 text-center space-y-4">
+                <AlertTriangle className="w-12 h-12 text-red-500 mx-auto" />
+                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">{error}</p>
+                <Button variant="outline" className="rounded-none uppercase text-[10px]" onClick={() => setError(null)}>Reintentar</Button>
+              </div>
             ) : (
-              <div className="text-center p-4">
-                <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">
-                  Presiona "Iniciar Escaneo" para comenzar a escanear códigos
-                  QR.
-                </p>
+              <div className="text-center p-8 space-y-6">
+                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto">
+                  <Camera className="h-8 w-8 text-zinc-700" />
+                </div>
+                <div className="space-y-2">
+                  <p className="font-black uppercase tracking-widest text-zinc-400">Listo para Validar</p>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest">Apuntá al QR del Asistente</p>
+                </div>
+                <Button onClick={startScanning} disabled={processing} className="w-full h-14 bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded-none font-black uppercase tracking-widest transition-all active:scale-95 shadow-[0_0_20px_rgba(124,58,237,0.2)]">
+                  ABRIR CÁMARA
+                </Button>
               </div>
             )}
           </div>
         )}
-      </CardContent>
-      <CardFooter className="flex justify-center">
-        {scanning ? (
-          <Button
-            onClick={stopScanning}
-            variant="destructive"
-            disabled={processing}
-          >
+      </div>
+
+      {scanning && (
+        <div className="p-6 pt-0">
+          <Button onClick={stopScanning} variant="ghost" disabled={processing} className="w-full h-12 text-red-500 hover:text-red-400 hover:bg-red-500/5 rounded-none font-black uppercase tracking-widest text-[10px]">
             <StopCircle className="h-4 w-4 mr-2" />
-            Detener Escaneo
+            DETENER SCANNER
           </Button>
-        ) : (
-          <Button onClick={startScanning} disabled={processing}>
-            {result ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Escanear Otro
-              </>
-            ) : (
-              <>
-                <Camera className="h-4 w-4 mr-2" />
-                Iniciar Escaneo
-              </>
-            )}
-          </Button>
-        )}
-      </CardFooter>
-    </Card>
+        </div>
+      )}
+
+      <div className="p-4 bg-zinc-950 border-t border-white/5 flex justify-center italic font-black text-[8px] text-zinc-800 tracking-[0.4em] uppercase">
+        Encrypted Endpoint Connection // PartyHub HQ
+      </div>
+      
+      <style jsx global>{`
+        @keyframes scan-line {
+          0% { transform: translateY(-150px); opacity: 0; }
+          50% { opacity: 1; }
+          100% { transform: translateY(150px); opacity: 0; }
+        }
+        .animate-scan-line {
+          animation: scan-line 2s ease-in-out infinite;
+        }
+      `}</style>
+    </div>
   );
 }

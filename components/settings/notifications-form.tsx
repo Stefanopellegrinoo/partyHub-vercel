@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
-import { Separator } from "@/components/ui/separator"
+import { useAuth } from "@/context/auth-context"
+import { updateProfile } from "@/services/auth-service"
+import { Bell, Mail, Zap, Check } from "lucide-react"
 
 const formSchema = z.object({
   emailNotifications: z.boolean(),
@@ -16,158 +18,69 @@ const formSchema = z.object({
   newParty: z.boolean(),
   ticketSales: z.boolean(),
   reservationExpiration: z.boolean(),
-  marketingEmails: z.boolean(),
 })
 
 export function NotificationsForm() {
+  const { user, updateUserContext } = useAuth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+
+  const currentPrefs = (user as any)?.preferences || {};
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      emailNotifications: true,
-      pushNotifications: true,
-      newParty: true,
-      ticketSales: true,
-      reservationExpiration: true,
-      marketingEmails: false,
+      emailNotifications: currentPrefs.emailNotifications ?? true,
+      pushNotifications: currentPrefs.pushNotifications ?? true,
+      newParty: currentPrefs.newParty ?? true,
+      ticketSales: currentPrefs.ticketSales ?? true,
+      reservationExpiration: currentPrefs.reservationExpiration ?? true,
     },
-    mode: "onChange",
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
     try {
-      // Simulamos una actualización
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      toast({
-        title: "Preferencias actualizadas",
-        description: "Tus preferencias de notificación han sido actualizadas",
-      })
+      await updateProfile({ preferences: values })
+      if (user) {
+        updateUserContext({
+          ...user,
+          preferences: values
+        })
+      }
+      toast({ title: "LOG UPDATED", description: "Preferencias guardadas." })
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron actualizar tus preferencias. Inténtalo de nuevo.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      toast({ title: "ERROR", description: "Falla al guardar.", variant: "destructive" })
+    } finally { setIsLoading(false); }
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Canales de notificación</h3>
-          <FormField
-            control={form.control}
-            name="emailNotifications"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Correo electrónico</FormLabel>
-                  <FormDescription>Recibir notificaciones por correo electrónico</FormDescription>
-                </div>
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-12">
+        <div className="space-y-6">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-[#7c3aed]" />
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Canales</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField control={form.control} name="emailNotifications" render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between bg-white/[0.02] border border-white/5 p-6 rounded-none">
+                <FormLabel className="text-sm font-black uppercase italic tracking-tighter text-white">E-MAIL</FormLabel>
+                <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} className="data-[state=checked]:bg-[#7c3aed]" /></FormControl>
               </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="pushNotifications"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Notificaciones push</FormLabel>
-                  <FormDescription>Recibir notificaciones en el navegador</FormDescription>
-                </div>
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
+            )} />
+            <FormField control={form.control} name="pushNotifications" render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between bg-white/[0.02] border border-white/5 p-6 rounded-none">
+                <FormLabel className="text-sm font-black uppercase italic tracking-tighter text-white">PUSH</FormLabel>
+                <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} className="data-[state=checked]:bg-[#7c3aed]" /></FormControl>
               </FormItem>
-            )}
-          />
+            )} />
+          </div>
         </div>
 
-        <Separator />
-
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Tipos de notificaciones</h3>
-          <FormField
-            control={form.control}
-            name="newParty"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Nuevas fiestas</FormLabel>
-                  <FormDescription>Cuando te inviten a una nueva fiesta</FormDescription>
-                </div>
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="ticketSales"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Ventas de entradas</FormLabel>
-                  <FormDescription>Cuando se vendan entradas en tus fiestas</FormDescription>
-                </div>
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="reservationExpiration"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Expiración de reservas</FormLabel>
-                  <FormDescription>Cuando una reserva esté a punto de expirar</FormDescription>
-                </div>
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <Separator />
-
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Marketing</h3>
-          <FormField
-            control={form.control}
-            name="marketingEmails"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                <div className="space-y-0.5">
-                  <FormLabel className="text-base">Correos de marketing</FormLabel>
-                  <FormDescription>Recibir correos sobre nuevas funciones y promociones</FormDescription>
-                </div>
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? "Guardando..." : "Guardar preferencias"}
+        <Button type="submit" disabled={isLoading} className="w-full md:w-auto h-16 bg-[#7c3aed] hover:bg-[#6d28d9] text-white rounded-none font-black uppercase px-12 transition-all active:scale-95 shadow-[0_0_20px_rgba(124,58,237,0.3)]">
+          {isLoading ? "ACTUALIZANDO..." : "GUARDAR PREFERENCIAS"}
+          <Check className="ml-2 h-5 w-5" />
         </Button>
       </form>
     </Form>
