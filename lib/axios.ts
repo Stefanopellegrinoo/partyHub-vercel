@@ -2,23 +2,26 @@ import { refreshToken } from "@/services/auth-service";
 import axios, { type AxiosError, type AxiosRequestConfig, type AxiosResponse } from "axios"
 
 const getBaseUrl = () => {
-  // 1. Si existe la variable de entorno, es la prioridad absoluta (Producción)
+  // 1. Prioridad: Variable de entorno (Lo que pongas en Vercel)
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   
-  // 2. Fallback para desarrollo local
+  // 2. Si estamos en el navegador
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname;
+    
+    // Si estás laburando en tu compu
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return "http://localhost:3055";
     }
+
+    // 3. Fallback directo a tu IP de backend (Tailscale/Privada)
+    // OJO: Si Vercel es HTTPS, esto te va a tirar "Mixed Content"
+    return "http://100.81.177.86:3055";
   }
 
-  // 3. Si llegamos acá en Vercel sin la variable, el sistema va a fallar, 
-  // pero al menos no va a intentar pegarle a una URL inexistente.
-  console.warn("⚠️ Advertencia: NEXT_PUBLIC_API_URL no está definida. Las peticiones a la API fallarán.");
-  return "http://localhost:3055"; // Fallback por defecto
+  return "http://100.81.177.86:3055";
 }
 
 // Create a base URL that works in both development and production
