@@ -36,7 +36,6 @@ export function JoinPartyForm() {
         title: "Te has unido a la fiesta",
         description: "Has sido agregado como vendedor",
       })
-      console.log("Party data:", party)
       // router.refresh()
       // router.push(`/dashboard/party/${party.id}`)
     } catch (error) {

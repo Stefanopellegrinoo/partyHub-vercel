@@ -1,67 +1,101 @@
-# PartyHub - Sistema de Gestión de Fiestas y Venta de Entradas
+# PartyHub — Web Client
 
-PartyHub es una aplicación web desarrollada con Next.js y TypeScript que permite organizar fiestas y gestionar la venta de entradas mediante vendedores asociados.
+The official frontend client for **PartyHub**, a distributed event ticketing and real-time coordination platform. Built with Next.js (App Router), TypeScript, Tailwind CSS, and Socket.io.
 
-## Características
+This application interacts directly with the [PartyHub Microservices Backend](https://github.com/Stefanopellegrinoo/partyHub_microservicios) via the unified API Gateway.
 
-- **Autenticación de usuarios**: Registro, inicio de sesión y recuperación de contraseña
-- **Gestión de fiestas**: Crear y unirse a fiestas mediante códigos de invitación
-- **Sistema de tandas de entradas**: Configuración de diferentes categorías y precios
-- **Reservas temporales**: Sistema de reserva de entradas con tiempo limitado (5 minutos)
-- **Panel de vendedor**: Interfaz para reservar y confirmar ventas de entradas
-- **Reportes y estadísticas**: Visualización de ventas por tanda y por vendedor
-- **Actualizaciones en tiempo real**: Notificaciones y cambios de stock mediante WebSockets
+---
 
-## Tecnologías utilizadas
+## Features
 
-- **Frontend**: Next.js 14, TypeScript, Tailwind CSS, shadcn/ui
-- **Estado y formularios**: React Hook Form, Zod, Context API
-- **Comunicación**: Axios, Socket.IO
-- **Visualización de datos**: Recharts
-- **Mock API**: json-server
+- **Organizer Dashboard**: Create and configure events, define ticket batches (*tandas*), set quotas, and manage assigned sellers.
+- **Seller Terminal**: Fast ticket reservation flow with real-time stock counters and temporary inventory locks.
+- **Real-Time Synchronization**: Live stock, batch transitions, and attendee check-ins powered by WebSockets (`socket.io-client`).
+- **QR Check-in Scanner**: Camera-integrated QR code reader using `@zxing/browser` for instant ticket validation at venue entrances.
+- **Authentication & Roles**: Dual JWT token handling (Access + Refresh token rotation) and role-based route protection (Organizer vs. Seller vs. Customer).
 
-## Estructura del proyecto
+---
 
-\`\`\`
-/app                → Rutas y layouts de Next.js (App Router)
-/components         → Componentes reutilizables
-/context            → Contextos globales (auth, socket)
-/hooks              → Custom hooks
-/services           → Servicios de API
-/types              → Tipos de TypeScript
-/mock-api           → Servidor API de prueba
-\`\`\`
+## Tech Stack
 
-## Instalación y ejecución
+- **Framework**: Next.js (App Router), React 19
+- **Language**: TypeScript
+- **Styling & UI**: Tailwind CSS, Radix UI primitives, Lucide Icons
+- **State & Data Fetching**: SWR, Axios, React Hook Form, Zod
+- **Real-Time Communication**: Socket.io Client
+- **Scanning & Charts**: ZXing Browser, Recharts
 
-1. Clona el repositorio
-2. Instala las dependencias:
-   \`\`\`bash
-   npm install
-   \`\`\`
-3. Inicia el servidor de desarrollo:
-   \`\`\`bash
-   npm run dev
-   \`\`\`
-4. Inicia el servidor mock API en otra terminal:
-   \`\`\`bash
-   npm run mock-api
-   \`\`\`
+---
 
-## Variables de entorno
+## Project Structure
 
-Crea un archivo `.env.local` con las siguientes variables:
+```
+partyHub-vercel/
+├── app/                  # Next.js App Router pages and layouts
+│   ├── dashboard/        # Organizer & Seller control panels
+│   ├── login/            # Authentication views
+│   └── register/
+├── components/           # UI and feature components
+│   ├── auth/             # Login, register, and password forms
+│   ├── check-in/         # QR scanner and entry verification
+│   ├── parties/          # Event management and batch tabs
+│   ├── seller/           # Seller reservation terminals
+│   └── ui/               # Radix / shadcn reusable UI primitives
+├── context/              # Global React Contexts (Auth, Socket)
+├── hooks/                # Custom React hooks (useAuth, useSocket, useDebounce)
+├── lib/                  # Utilities, API Axios instance, validation schemas
+├── services/             # HTTP client services per domain
+└── types/                # TypeScript interfaces and domain models
+```
 
-\`\`\`
-NEXT_PUBLIC_API_URL=http://localhost:3001
-\`\`\`
+---
 
-## Usuarios de prueba
+## Getting Started
 
-- **Usuario regular**:
-  - Email: test@example.com
-  - Contraseña: password123
+### Prerequisites
+- Node.js 18+ or 20+
+- Running instance of the [PartyHub Backend](https://github.com/Stefanopellegrinoo/partyHub_microservicios)
 
-- **Administrador**:
-  - Email: admin@example.com
-  - Contraseña: admin123
+### 1. Installation
+```bash
+cd partyHub-vercel
+npm install
+```
+
+### 2. Environment Configuration
+Create a `.env.local` file based on the example:
+```bash
+cp .env.example .env.local
+```
+
+Set the API Gateway URL:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3055
+```
+
+### 3. Run Development Server
+```bash
+npm run dev
+```
+
+The application will be available at `http://localhost:3013`.
+
+---
+
+## Scripts
+
+| Command | Description |
+| :--- | :--- |
+| `npm run dev` | Starts Next.js in development mode on port 3013 |
+| `npm run build` | Builds the production bundle |
+| `npm run start` | Runs the production build |
+| `npm run lint` | Runs ESLint checks |
+
+---
+
+## Related Repositories
+
+- **Backend (Microservices & Gateway)**: [Stefanopellegrinoo/partyHub_microservicios](https://github.com/Stefanopellegrinoo/partyHub_microservicios)
+
+## License
+MIT

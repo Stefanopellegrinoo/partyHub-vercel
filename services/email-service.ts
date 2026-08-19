@@ -159,8 +159,6 @@ export async function sendTicketConfirmationEmail(ticket: Ticket, party: Party, 
   try {
     // In development without API, just log the email
     if (process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_API_URL) {
-      console.log("Sending ticket confirmation email to:", ticket.customerEmail || ticket.attendee?.email)
-      console.log("Email template:", getTicketEmailTemplate(ticket, party, qrCodeUrl))
 
       // Simulate API delay
       await new Promise((resolve) => setTimeout(resolve, 800))
@@ -225,7 +223,6 @@ export async function resendTicketEmail(ticketId: string, partyId: string): Prom
   try {
     // In development without API, just log the email
     if (process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_API_URL) {
-      console.log("Resending ticket confirmation email for ticket:", ticketId)
 
       // Simulate API delay
       await new Promise((resolve) => setTimeout(resolve, 800))

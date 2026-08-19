@@ -47,7 +47,6 @@ export function JoinPartyButton() {
         title: "Te has unido a la fiesta",
         description: "Has sido agregado como vendedor",
       })
-      console.log("Party data:", party)
       setOpen(false)
       form.reset()
       router.refresh()

@@ -57,7 +57,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
       // Set up event handlers
       socketInstance.on("connect", () => {
-        console.log("Socket connected")
         setIsConnected(true)
         reconnectAttempts.current = 0
 
@@ -69,7 +68,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       })
 
       socketInstance.on("disconnect", (reason) => {
-        console.log(`Socket disconnected: ${reason}`)
         setIsConnected(false)
 
         // If the server closed the connection, try to reconnect manually
@@ -78,7 +76,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           if (!reconnectInterval.current && reconnectAttempts.current < maxReconnectAttempts) {
             reconnectInterval.current = setInterval(() => {
               reconnectAttempts.current += 1
-              console.log(`Attempting to reconnect (${reconnectAttempts.current}/${maxReconnectAttempts})...`)
 
               socketInstance.connect()
 

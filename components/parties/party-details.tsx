@@ -131,7 +131,6 @@ export function PartyDetails({ id }: { id: string }) {
 
   // Normalizamos a número para evitar fallos de tipo (string vs number)
   const isOrganizer = Number(party?.organizer_id) === Number(user?.id);
-  console.log("🔍 [Permissions Audit]:", { partyOrgId: party?.organizer_id, userId: user?.id, isOrganizer });
 
   return (
     <Card className="bg-[#080808] border-white/5 rounded-none overflow-hidden relative">

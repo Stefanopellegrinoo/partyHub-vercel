@@ -83,10 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return null
           }
         // Verificamos expiración del token
-        console.log(isTokenExpired())
         if (isTokenExpired()) {
           const refreshed = await tryRefreshToken();
-          console.log(refreshed)// esta request lleva el Authorization
           
           if (!refreshed) throw new Error("Token expirado y no se pudo refrescar");
         }
@@ -97,7 +95,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
         // Token válido o refrescado. Consultamos al backend para confirmarlo.
         const userData = await getUser(); 
-        console.log(userData)// esta request lleva el Authorization
         setUser(userData);
         setIsAuthenticated(true);
         // setLocalStorage("user", userData);

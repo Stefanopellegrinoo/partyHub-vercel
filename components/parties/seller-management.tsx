@@ -54,7 +54,6 @@ export function SellerManagement({ partyId }: { partyId: string }) {
     try {
       setIsLoading(true)
       const data = await getPartySellers(partyId)
-      console.log("Sellers data:", data)
       setSellers(data)
     } catch (error) {
       console.error("Error loading sellers:", error)
@@ -73,7 +72,6 @@ export function SellerManagement({ partyId }: { partyId: string }) {
 
     setIsProcessing(true)
     try {
-      console.log(selectedSeller)
       await removePartySeller(partyId, selectedSeller.seller_id)
       setSellers(sellers.filter((s) => s.seller_id !== selectedSeller.seller_id))
       toast({

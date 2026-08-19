@@ -43,7 +43,6 @@ export async function getPartyDetails(id: string): Promise<Party> {
     const cachedData = cacheService.get<Party>(cacheKey);
 
     if (cachedData) {
-      console.log("Using cached data for party details");
       return cachedData;
     }
     const response = await api.get<Party>(`/parties/${id}`);

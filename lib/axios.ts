@@ -38,7 +38,6 @@ instance.interceptors.request.use((config) => {
   const token = localStorage.getItem("authToken");
   // Prevenir que mande la string "undefined" o "null" literal
   if (token && token !== "undefined" && token !== "null") {
-    console.log("📦 Token enviado:", token.substring(0, 15) + "..."); // Solo imprimir el principio por seguridad
     config.headers.Authorization = `Bearer ${token}`;
   }
 

@@ -52,7 +52,6 @@ export function CanceledTicketsTab({ partyId }: { partyId: string }) {
     socket.emit("join-party", partyId)
 
     socket.on("pool-updated", (data) => {
-      console.log("♻️ Pool updated received:", data)
       // Refrescamos la lista sin mostrar el loader principal para no interrumpir al usuario
       fetchPool(false)
     })
